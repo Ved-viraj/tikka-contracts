@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, Env, Vec};
+use soroban_sdk::{auth::InvokerContractAuthEntry, Address, Env, IntoVal, Symbol, Val, Vec};
 
 use crate::events::{RaffleFinalized, WinnerDrawn};
 use crate::randomness::{OracleSeedWinnerSelection, WinnerSelectionStrategy};
@@ -136,5 +136,42 @@ pub(crate) fn do_finalize_with_seed(
     }
     .publish(env);
 
+    record_leaderboard(env, &raffle);
+
     Ok(())
+}
+
+fn record_leaderboard(env: &Env, raffle: &Raffle) {
+    let factory: Address = match env.storage().instance().get(&DataKey::Factory) {
+        Some(f) => f,
+        None => return,
+    };
+    let raffle_id = env.current_contract_address();
+    let tickets = raffle.tickets_sold as i128;
+    let volume = raffle.ticket_price.saturating_mul(tickets);
+    let args: Vec<Val> = (
+        raffle_id.clone(),
+        tickets,
+        raffle.prize_amount,
+        volume,
+    )
+        .into_val(env);
+
+    use soroban_sdk::auth::{ContractContext, SubContractInvocation};
+    env.authorize_as_current_contract(soroban_sdk::vec![
+        env,
+        InvokerContractAuthEntry::Contract(SubContractInvocation {
+            context: ContractContext {
+                contract: factory.clone(),
+                fn_name: Symbol::new(env, "record_leaderboard_entry"),
+                args: args.clone(),
+            },
+            sub_invocations: Vec::new(env),
+        }),
+    ]);
+    let _ = env.invoke_contract::<()>(
+        &factory,
+        &Symbol::new(env, "record_leaderboard_entry"),
+        args,
+    );
 }

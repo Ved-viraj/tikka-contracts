@@ -16,7 +16,8 @@ use soroban_sdk::testutils::Address as _;
 mod events;
 
 use raffle_shared::{
-    effective_limit, AdminOp, FairnessData, PageResultRaffles, PaginationParams, RaffleConfig,
+    effective_limit, AdminOp, FairnessData, LeaderboardMetric, PageResultRaffles, PaginationParams,
+    RaffleConfig,
 };
 
 use raffle_shared::constants::{CHECKPOINT_INTERVAL, MAX_PROTOCOL_FEE_BP, TIMELOCK_DELAY_SECONDS};
@@ -78,6 +79,10 @@ pub enum DataKey {
     /// carries a category, enabling `get_raffles_by_category` queries without an
     /// off-chain indexer.
     CategoryRaffles(soroban_sdk::String),
+    TopByTickets,
+    TopByPrize,
+    TopByVolume,
+    GlobalEmergencyPause,
 }
 
 #[derive(Clone)]
@@ -978,6 +983,75 @@ impl RaffleFactory {
         Ok(())
     }
 
+    const LEADERBOARD_CAP: u32 = 10;
+
+    fn upsert_leaderboard(
+        env: &Env,
+        key: &DataKey,
+        raffle: Address,
+        metric: i128,
+    ) {
+        let mut board: Vec<(Address, i128)> = env
+            .storage()
+            .persistent()
+            .get(key)
+            .unwrap_or_else(|| Vec::new(env));
+
+        let mut next = Vec::new(env);
+        for i in 0..board.len() {
+            let entry = board.get(i).unwrap();
+            if entry.0 != raffle {
+                next.push_back(entry);
+            }
+        }
+        next.push_back((raffle, metric));
+
+        let len = next.len();
+        for i in 0..len {
+            for j in (i + 1)..len {
+                let left = next.get(i).unwrap();
+                let right = next.get(j).unwrap();
+                if right.1 > left.1 {
+                    next.set(i, right);
+                    next.set(j, left);
+                }
+            }
+        }
+
+        while next.len() > LEADERBOARD_CAP {
+            next.pop_back();
+        }
+
+        env.storage().persistent().set(key, &next);
+    }
+
+    /// Called by a raffle instance after finalization (#484).
+    pub fn record_leaderboard_entry(
+        env: Env,
+        raffle_address: Address,
+        tickets_sold: i128,
+        prize_amount: i128,
+        total_volume: i128,
+    ) -> Result<(), ContractError> {
+        raffle_address.require_auth();
+        Self::upsert_leaderboard(&env, &DataKey::TopByTickets, raffle_address.clone(), tickets_sold);
+        Self::upsert_leaderboard(&env, &DataKey::TopByPrize, raffle_address.clone(), prize_amount);
+        Self::upsert_leaderboard(&env, &DataKey::TopByVolume, raffle_address, total_volume);
+        Ok(())
+    }
+
+    pub fn get_leaderboard(env: Env, metric: LeaderboardMetric) -> Vec<(Address, i128)> {
+        let key = match metric {
+            LeaderboardMetric::TicketsSold => DataKey::TopByTickets,
+            LeaderboardMetric::PrizeAmount => DataKey::TopByPrize,
+            LeaderboardMetric::TotalVolume => DataKey::TopByVolume,
+        };
+        env.storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(&env))
+    }
+
     pub fn clean_old_raffle(env: Env, raffle_id: u32) -> Result<(), ContractError> {
         let admin = require_admin(&env)?;
 
@@ -986,15 +1060,6 @@ impl RaffleFactory {
         let raffle_address: Address = env
             .storage()
             .persistent()
-            .get(&DataKey::RaffleInstances)
-            .unwrap_or_else(|| Vec::new(&env));
-
-        if raffle_id >= instances.len() {
-            return Err(ContractError::InvalidRaffleId);
-        }
-
-        let raffle_address = instances.get(raffle_id).unwrap();
-
             .get(&DataKey::RaffleById(raffle_id))
             .ok_or(ContractError::InvalidRaffleId)?;
 
@@ -1036,7 +1101,7 @@ impl RaffleFactory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use raffle_shared::{RandomnessSource, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT};
+    use raffle_shared::{LeaderboardMetric, RandomnessSource, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT};
     use soroban_sdk::{String, Vec as SdkVec};
 
     fn setup_factory(env: &Env) -> (RaffleFactoryClient<'_>, Address, Address) {
@@ -1075,6 +1140,10 @@ mod tests {
             metadata_hash: BytesN::from_array(env, &[1u8; 32]),
             claim_lockup_seconds: 0,
             swap_deadline_seconds: 0,
+            early_bird_ticket_percentage: 0,
+            early_bird_discount_bp: 0,
+            category: None,
+            unique_winners: false,
         }
     }
 
@@ -2093,5 +2162,27 @@ mod tests {
         assert!(!p1.has_more);
         assert_eq!(p1.items.get(0).unwrap(), addrs[3].clone());
         assert_eq!(p1.items.get(1).unwrap(), addrs[4].clone());
+    }
+
+    #[test]
+    fn leaderboard_top_ten_by_tickets() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _, _) = setup_factory(&env);
+
+        for i in 0..15u32 {
+            let addr = Address::generate(&env);
+            client.record_leaderboard_entry(
+                &addr,
+                &((i + 1) as i128),
+                &0,
+                &0,
+            );
+        }
+
+        let board = client.get_leaderboard(&LeaderboardMetric::TicketsSold);
+        assert_eq!(board.len(), 10);
+        assert_eq!(board.get(0).unwrap().1, 15);
+        assert_eq!(board.get(9).unwrap().1, 6);
     }
 }

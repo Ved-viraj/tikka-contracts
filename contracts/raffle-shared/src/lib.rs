@@ -156,6 +156,15 @@ impl RaffleConfig {
     }
 }
 
+/// Factory leaderboard sort key (#484).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+pub enum LeaderboardMetric {
+    TicketsSold = 0,
+    PrizeAmount = 1,
+    TotalVolume = 2,
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub struct Ticket {
