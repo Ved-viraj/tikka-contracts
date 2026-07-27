@@ -40,7 +40,7 @@ use crate::events::{
     RaffleCancelled, RaffleCreated, RaffleFailed, RaffleFinalized, RaffleStatusChanged,
     RandomnessFallbackTriggered, RandomnessReceived, RandomnessRequested, SwapDeadlineUpdated,
     TicketNftMinted, TicketPurchased, TicketRefunded, TicketSalesPaused, TicketSalesResumed,
-    TokensRescued, WinnerDrawn,
+    TokensRescued, WinnerDrawn, MetadataHashUpdated,
 };
 
 const ORACLE_TIMEOUT_LEDGERS: u32 = 200;
@@ -1937,6 +1937,35 @@ impl RaffleInstance {
 
     pub fn set_swap_deadline(env: Env, new_deadline_seconds: u64) -> Result<(), Error> {
         self::admin::set_swap_deadline(env, new_deadline_seconds)
+    }
+
+    pub fn update_metadata_hash(env: Env, new_hash: BytesN<32>) -> Result<(), Error> {
+        let mut raffle = read_raffle(&env)?;
+        raffle.creator.require_auth();
+
+        if raffle.status != RaffleStatus::PendingPrize {
+            return Err(Error::InvalidStatus);
+        }
+        if raffle.tickets_sold > 0 {
+            return Err(Error::InvalidStatus);
+        }
+        if new_hash == BytesN::from_array(&env, &[0u8; 32]) {
+            return Err(Error::InvalidParameters);
+        }
+
+        let old_hash = raffle.metadata_hash.clone();
+        raffle.metadata_hash = new_hash.clone();
+        write_raffle(&env, &raffle);
+
+        MetadataHashUpdated {
+            old_hash,
+            new_hash,
+            updated_by: raffle.creator,
+            timestamp: env.ledger().timestamp(),
+        }
+        .publish(&env);
+
+        Ok(())
     }
 
 }

@@ -2185,3 +2185,58 @@ fn unique_winners_limits_one_tier_per_address() {
     let fairness = client.get_fairness_data();
     assert!(fairness.unique_winners);
 }
+
+#[test]
+fn update_metadata_hash_before_deposit_only() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(crate::Contract, ());
+    let client = crate::ContractClient::new(&env, &contract_id);
+    let factory = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let creator = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let sac = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_addr = sac.address();
+
+    let config = RaffleConfig {
+        description: soroban_sdk::String::from_str(&env, "metadata"),
+        end_time: 0,
+        no_deadline: true,
+        max_tickets: 5,
+        max_tickets_per_tx: 5,
+        min_tickets: 1,
+        allow_multiple: true,
+        ticket_price: 10_000,
+        payment_token: token_addr,
+        prize_amount: 50_000,
+        prizes: soroban_sdk::vec![&env, 10_000u32],
+        randomness_source: RandomnessSource::Internal,
+        oracle_address: None,
+        protocol_fee_bp: 0,
+        treasury_address: None,
+        swap_router: None,
+        tikka_token: None,
+        metadata_hash: BytesN::from_array(&env, &[1u8; 32]),
+        claim_lockup_seconds: 0,
+        swap_deadline_seconds: 0,
+        early_bird_ticket_percentage: 0,
+        early_bird_discount_bp: 0,
+        category: None,
+        unique_winners: false,
+    };
+
+    client.init(&factory, &admin, &creator, &config);
+    let new_hash = BytesN::from_array(&env, &[2u8; 32]);
+    client.update_metadata_hash(&new_hash);
+    assert_eq!(client.get_raffle().metadata_hash, new_hash);
+
+    token::StellarAssetClient::new(&env, &token_addr).mint(&creator, &1_000_000);
+    client.deposit_prize();
+    assert_eq!(
+        client.try_update_metadata_hash(&BytesN::from_array(&env, &[3u8; 32])),
+        Err(Ok(Error::InvalidStatus))
+    );
+}

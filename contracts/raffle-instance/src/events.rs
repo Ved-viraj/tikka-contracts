@@ -22,6 +22,15 @@ pub struct RaffleCreated {
 
 #[derive(Clone)]
 #[contractevent]
+pub struct MetadataHashUpdated {
+    pub old_hash: BytesN<32>,
+    pub new_hash: BytesN<32>,
+    pub updated_by: Address,
+    pub timestamp: u64,
+}
+
+#[derive(Clone)]
+#[contractevent]
 pub struct PrizeDeposited {
     pub creator: Address,
     pub amount: i128,
