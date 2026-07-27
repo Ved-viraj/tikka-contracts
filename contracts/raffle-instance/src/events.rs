@@ -17,6 +17,7 @@ pub struct RaffleCreated {
     pub randomness_source: RandomnessSource,
     #[topic]
     pub metadata_hash: BytesN<32>,
+    pub unique_winners: bool,
 }
 
 #[derive(Clone)]
@@ -95,6 +96,7 @@ pub struct RaffleFinalized {
     pub randomness_source: RandomnessSource,
     pub randomness_type: RandomnessType,
     pub finalized_at: u64,
+    pub unique_winners: bool,
 }
 
 #[derive(Clone)]

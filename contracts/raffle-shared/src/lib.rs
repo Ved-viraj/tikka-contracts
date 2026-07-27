@@ -140,6 +140,8 @@ pub struct RaffleConfig {
     /// instance's `init`; the factory maintains a per-category index so clients
     /// can query raffles by category without an off-chain indexer. See #439.
     pub category: Option<String>,
+    /// When true, each address may win at most one prize tier (#485).
+    pub unique_winners: bool,
 }
 
 impl RaffleConfig {
@@ -183,6 +185,8 @@ pub struct FairnessData {
     pub draw_timestamp: u64,
     /// Sequence counter for draws/re-draws within the raffle.
     pub draw_sequence: u32,
+    /// Whether unique-address winner fairness was enabled for this draw (#485).
+    pub unique_winners: bool,
 }
 
 /// Generic pagination request for list queries.
@@ -295,4 +299,39 @@ pub trait NftTicketTrait {
         ticket_id: u32,
         raffle_id: Address,
     );
+}
+
+/// Generates `require_admin` using the embedding crate's `DataKey::Admin`.
+#[macro_export]
+macro_rules! impl_require_admin {
+    ($err:ty, $not_auth:expr) => {
+        fn require_admin(env: &soroban_sdk::Env) -> Result<soroban_sdk::Address, $err> {
+            let admin: soroban_sdk::Address = env
+                .storage()
+                .instance()
+                .get(&crate::DataKey::Admin)
+                .or_else(|| env.storage().persistent().get(&crate::DataKey::Admin))
+                .ok_or($not_auth)?;
+            admin.require_auth();
+            Ok(admin)
+        }
+    };
+}
+
+/// Generates a pause guard using the embedding crate's `DataKey::Paused`.
+#[macro_export]
+macro_rules! impl_require_not_paused {
+    ($err:ty, $paused_err:expr, $fn_name:ident) => {
+        fn $fn_name(env: &soroban_sdk::Env) -> Result<(), $err> {
+            if env
+                .storage()
+                .instance()
+                .get(&crate::DataKey::Paused)
+                .unwrap_or(false)
+            {
+                return Err($paused_err);
+            }
+            Ok(())
+        }
+    };
 }

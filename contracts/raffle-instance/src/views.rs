@@ -20,6 +20,7 @@ pub(crate) fn get_fairness_data(env: Env) -> Result<FairnessData, Error> {
         winning_ticket_indices: meta.winning_ticket_indices,
         draw_timestamp: meta.draw_timestamp,
         draw_sequence: meta.draw_sequence,
+        unique_winners: meta.unique_winners,
     })
 }
 
