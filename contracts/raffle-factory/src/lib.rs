@@ -1052,6 +1052,40 @@ impl RaffleFactory {
             .unwrap_or_else(|| Vec::new(&env))
     }
 
+    pub fn emergency_pause_all(env: Env, reason: soroban_sdk::String) -> Result<(), ContractError> {
+        let admin = require_admin(&env)?;
+        env.storage()
+            .persistent()
+            .set(&DataKey::GlobalEmergencyPause, &true);
+        events::GlobalEmergencyPaused {
+            paused_by: admin,
+            reason,
+            timestamp: env.ledger().timestamp(),
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    pub fn emergency_unpause_all(env: Env) -> Result<(), ContractError> {
+        let admin = require_admin(&env)?;
+        env.storage()
+            .persistent()
+            .set(&DataKey::GlobalEmergencyPause, &false);
+        events::GlobalEmergencyUnpaused {
+            unpaused_by: admin,
+            timestamp: env.ledger().timestamp(),
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    pub fn is_global_paused(env: Env) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::GlobalEmergencyPause)
+            .unwrap_or(false)
+    }
+
     pub fn clean_old_raffle(env: Env, raffle_id: u32) -> Result<(), ContractError> {
         let admin = require_admin(&env)?;
 
@@ -2184,5 +2218,17 @@ mod tests {
         assert_eq!(board.len(), 10);
         assert_eq!(board.get(0).unwrap().1, 15);
         assert_eq!(board.get(9).unwrap().1, 6);
+    }
+
+    #[test]
+    fn global_emergency_pause_blocks_factory_flag() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _admin, _) = setup_factory(&env);
+        assert!(!client.is_global_paused());
+        client.emergency_pause_all(&String::from_str(&env, "incident"));
+        assert!(client.is_global_paused());
+        client.emergency_unpause_all();
+        assert!(!client.is_global_paused());
     }
 }

@@ -74,6 +74,21 @@ pub struct ContractUnpaused {
 
 #[derive(Clone)]
 #[contractevent]
+pub struct GlobalEmergencyPaused {
+    pub paused_by: Address,
+    pub reason: soroban_sdk::String,
+    pub timestamp: u64,
+}
+
+#[derive(Clone)]
+#[contractevent]
+pub struct GlobalEmergencyUnpaused {
+    pub unpaused_by: Address,
+    pub timestamp: u64,
+}
+
+#[derive(Clone)]
+#[contractevent]
 pub struct AdminTransferProposed {
     pub current_admin: Address,
     pub proposed_admin: Address,

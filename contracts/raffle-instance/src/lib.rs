@@ -366,6 +366,23 @@ fn transition_to_drawing(env: &Env, raffle: &mut Raffle, timestamp: u64) -> Resu
 
 raffle_shared::impl_require_not_paused!(Error, Error::ContractPaused, require_not_paused);
 
+fn require_global_not_paused(env: &Env) -> Result<(), Error> {
+    let factory: Address = env
+        .storage()
+        .instance()
+        .get(&DataKey::Factory)
+        .ok_or(Error::NotInitialized)?;
+    let paused: bool = env.invoke_contract(
+        &factory,
+        &Symbol::new(env, "is_global_paused"),
+        ().into_val(env),
+    );
+    if paused {
+        return Err(Error::ContractPaused);
+    }
+    Ok(())
+}
+
 fn validate_token_address(env: &Env, token_address: &Address) -> Result<(), Error> {
     let token_client = token::Client::new(env, token_address);
     let _ = token_client
@@ -685,6 +702,7 @@ impl RaffleInstance {
         }
         buyer.require_auth();
         require_not_paused(&env)?;
+        require_global_not_paused(&env)?;
 
         if raffle.status != RaffleStatus::Active {
             return Err(Error::RaffleInactive);
@@ -1186,6 +1204,7 @@ impl RaffleInstance {
 
     pub fn claim_prize(env: Env, winner: Address, tier_index: u32) -> Result<i128, Error> {
         winner.require_auth();
+        require_global_not_paused(&env)?;
         let _guard = Guard::new(&env)?;
         let mut raffle = read_raffle(&env)?;
 
