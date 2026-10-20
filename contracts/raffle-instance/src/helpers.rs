@@ -21,6 +21,33 @@ pub(crate) fn write_raffle(env: &Env, raffle: &Raffle) {
     env.storage().instance().set(&DataKey::Raffle, raffle);
 }
 
+/// Add `amount` to the outstanding gross-revenue counter.
+///
+/// `amount` is the sum of `price_paid` written for the purchase, which is the
+/// charge after bundle and early-bird pricing and gross of the protocol fee.
+pub(crate) fn add_gross_revenue(env: &Env, amount: i128) -> Result<(), Error> {
+    let prev: i128 = env
+        .storage()
+        .instance()
+        .get(&DataKey::GrossRevenue)
+        .unwrap_or(0);
+    let next = prev.checked_add(amount).ok_or(Error::ArithmeticOverflow)?;
+    env.storage().instance().set(&DataKey::GrossRevenue, &next);
+    Ok(())
+}
+
+/// Subtract a refunded ticket's `price_paid` from outstanding gross revenue.
+pub(crate) fn sub_gross_revenue(env: &Env, amount: i128) -> Result<(), Error> {
+    let prev: i128 = env
+        .storage()
+        .instance()
+        .get(&DataKey::GrossRevenue)
+        .unwrap_or(0);
+    let next = prev.checked_sub(amount).ok_or(Error::ArithmeticOverflow)?;
+    env.storage().instance().set(&DataKey::GrossRevenue, &next);
+    Ok(())
+}
+
 /// Re-draw a winning ticket index so the tier is won by an address that has
 /// not already won an earlier tier.
 ///

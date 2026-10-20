@@ -43,7 +43,7 @@ use raffle_shared::{RandomnessSource, Ticket};
 
 use crate::events::{DrawTriggered, RandomnessRequested, TicketPurchased};
 use crate::helpers::{
-    bump_raffle_ttl, calculate_buy_quote, request_randomness,
+    add_gross_revenue, bump_raffle_ttl, calculate_buy_quote, request_randomness,
     require_not_paused, transition_to_drawing, Guard,
 };
 use crate::{CommitRevealEntry, DataKey, Error, Raffle, RaffleStatus};
@@ -284,6 +284,11 @@ pub(crate) fn buy_tickets(env: Env, buyer: Address, quantity: u32) -> Result<u32
     raffle.tickets_sold = snapshot_sold
         .checked_add(quantity)
         .ok_or(Error::ArithmeticOverflow)?;
+    let collected = effective_price
+        .checked_mul(quantity as i128)
+        .ok_or(Error::ArithmeticOverflow)?;
+    add_gross_revenue(&env, collected)?;
+
     //  7. transition_to_drawing and request_randomness (if needed)
     if raffle.tickets_sold >= raffle.max_tickets {
         transition_to_drawing(&env, &mut raffle, timestamp)?;
@@ -555,6 +560,11 @@ pub(crate) fn buy_tickets_for(
     raffle.tickets_sold = snapshot_sold
         .checked_add(quantity)
         .ok_or(Error::ArithmeticOverflow)?;
+    let collected = effective_price
+        .checked_mul(quantity as i128)
+        .ok_or(Error::ArithmeticOverflow)?;
+    add_gross_revenue(&env, collected)?;
+
     //  7. transition_to_drawing and request_randomness (if needed)
     if raffle.tickets_sold >= raffle.max_tickets {
         transition_to_drawing(&env, &mut raffle, timestamp)?;

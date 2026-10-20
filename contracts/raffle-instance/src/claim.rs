@@ -3,6 +3,7 @@ use raffle_shared::math::split_bp;
 use soroban_sdk::{token, Address, Env};
 
 use crate::events::{PrizeClaimed, PrizeRefunded, PrizeSwept, TicketRefunded};
+use crate::helpers::sub_gross_revenue;
 use crate::{
     calculate_tier_prize, read_raffle, transition_status, write_raffle, DataKey, Error, Guard,
     RaffleStatus, Winner,
@@ -248,6 +249,7 @@ pub(crate) fn refund_ticket(env: Env, ticket_id: u32) -> Result<i128, Error> {
         )
         .map_err(|_| Error::TokenTransferFailed)?
         .map_err(|_| Error::TokenTransferFailed)?;
+    sub_gross_revenue(&env, ticket.price_paid)?;
     TicketRefunded {
         buyer: ticket.payer,
         ticket_number: ticket.ticket_number,
@@ -306,6 +308,7 @@ pub(crate) fn batch_refund_tickets(
                 .map_err(|_| Error::TokenTransferFailed)?
                 .map_err(|_| Error::TokenTransferFailed)?;
 
+            sub_gross_revenue(&env, ticket.price_paid)?;
             TicketRefunded {
                 buyer: ticket.payer,
                 ticket_number: ticket.ticket_number,

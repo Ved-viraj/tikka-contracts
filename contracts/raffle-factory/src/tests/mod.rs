@@ -12,10 +12,11 @@
 use crate::*;
 use raffle_shared::{
     constants::MAX_INTERNAL_RANDOMNESS_PRIZE_AMOUNT, PaginationParams, RaffleConfigBuilder,
-    RandomnessSource, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT,
+    RandomnessSource, Ticket, TicketBundle, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT,
 };
 use soroban_sdk::{
     testutils::{Address as _, Events, Ledger, MockAuth, MockAuthInvoke},
+    token::StellarAssetClient,
     Address, BytesN, Env, FromVal, IntoVal, String, Symbol, Val, Vec as SdkVec,
 };
 
@@ -264,6 +265,7 @@ pub mod budget;
 pub mod governance;
 pub mod init;
 pub mod pagination;
+pub mod pricing;
 pub mod raffles;
 pub mod recurring;
 pub mod registry;

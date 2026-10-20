@@ -76,6 +76,7 @@ Source of truth: `DataKey` enum (and admin-cancel flow keys noted below).
 | `RandomnessRequestLedger` | **Instance** | With request | Yes while pending | Yes after resolve | Timeout base (`ORACLE_TIMEOUT_LEDGERS` = 200) |
 | `RandomnessRequestId` | **Instance** | With request (when ID allocated) | Yes while pending | Yes after resolve | Correlates oracle callback |
 | `AccumulatedFees` | **Instance** | Ticket buys / fee withdraw | Yes | No while balance > 0 | Escrowed protocol fees |
+| `GrossRevenue` | **Instance** | Ticket buys; decremented on refund | Yes | No while raffle is live | Sum of outstanding `Ticket.price_paid` |
 | `FinishTime` | **Instance** | Lifecycle helper / cleanup target | Operational | After terminal state | Present in enum; extend with instance TTL |
 | `RandomnessSeed` | **Persistent** (fairness metadata); readers may also check instance in older paths | On successful finalize | Audit / dispute | Prefer keep after finalize | `FairnessMetadata` / seed fingerprint for `get_fairness_data` |
 | `Ticket(u32)` | **Persistent** | Per purchased ticket | Yes | No until refunds/claims done | Owner + purchase metadata |

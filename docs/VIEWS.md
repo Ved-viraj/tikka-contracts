@@ -41,6 +41,16 @@ Every paginated view returns `PageResultRaffles { items, total, has_more }`:
 | `get_unique_participants` | `u32` | None | Total unique participants |
 | `get_raffle_fairness_data` | `Result<FairnessData>` | None | Fairness data for a raffle instance |
 
+## Instance `get_stats`
+
+`gross_revenue` is the sum of `Ticket.price_paid` for tickets that have not been
+refunded. Each purchase adds that sum (bundle price and early-bird discount
+included). A refund subtracts the refunded ticket's `price_paid`.
+
+The figure is **gross of protocol fees**: the fee is taken out of the charge,
+not added on top, so it is already inside `price_paid`. It is **net of
+refunds**. It is not `tickets_sold * ticket_price`.
+
 ## Edge-Case Tests
 
 The `tests/views.rs` module covers:

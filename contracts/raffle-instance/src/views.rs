@@ -95,7 +95,7 @@ pub(crate) fn get_fairness_data(env: Env) -> Result<FairnessData, Error> {
 /// |---|---|
 /// | `tickets_sold` | [`Raffle::tickets_sold`](crate::Raffle) |
 /// | `unique_buyers` | `TicketBuyers` — deduplicated buyer address list |
-/// | `gross_revenue` | `tickets_sold * ticket_price` |
+/// | `gross_revenue` | `GrossRevenue` — sum of `price_paid` still outstanding |
 /// | `fees_accrued` | `AccumulatedFees` instance storage |
 /// | `prize_funded` | [`Raffle::prize_deposited`](crate::Raffle) |
 /// | `status` | [`Raffle::status`](crate::Raffle) |
@@ -129,9 +129,11 @@ pub(crate) fn get_stats(env: Env) -> Result<RaffleStats, Error> {
         0
     };
 
-    let gross_revenue = (raffle.tickets_sold as i128)
-        .checked_mul(raffle.ticket_price)
-        .ok_or(Error::ArithmeticOverflow)?;
+    let gross_revenue: i128 = env
+        .storage()
+        .instance()
+        .get(&DataKey::GrossRevenue)
+        .unwrap_or(0);
 
     let mut claimed_prizes = 0;
     let mut swept_prizes = 0;

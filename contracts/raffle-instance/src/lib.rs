@@ -200,6 +200,10 @@ pub enum DataKey {
     RandomnessRequestId,
     FinishTime,
     AccumulatedFees,
+    /// Sum of `Ticket::price_paid` for tickets that have not been refunded.
+    /// Updated on both purchase paths and decremented on refund. Instance tier
+    /// so `get_stats` can read it in O(1).
+    GrossRevenue,
     CommitEntry(u32),
     DrawingLock,
     TicketBuyers,
