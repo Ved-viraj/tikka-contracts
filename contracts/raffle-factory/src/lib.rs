@@ -325,24 +325,13 @@ pub(crate) fn compute_raffle_salt(env: &Env, creator: &Address, nonce: u64) -> B
 
 /// Validate that an address is usable for a privileged role (admin/treasury).
 ///
-/// Rejects the zero contract address (all-zero 32-byte hash) and the factory's
-/// own address to prevent a self-referential admin or treasury that would brick
-/// the contract.  Account (keypair) addresses are always accepted.
+/// The address must exist on the ledger and must not be this factory. A missing
+/// account or contract (including the zero contract) is rejected so an admin or
+/// treasury cannot be bricked onto an address nobody can authorize.
 fn require_valid_role_address(env: &Env, address: &Address) -> Result<(), ContractError> {
-    #[cfg(not(test))]
-    if !address.exists() {
-        return Err(ContractError::InvalidParameters);
-    }
-    #[cfg(test)]
-    {
-        use soroban_sdk::String;
-        const ZERO_CONTRACT: &str = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4";
-        let zero = Address::from_string(&String::from_str(env, ZERO_CONTRACT));
-        if *address == zero {
-            return Err(ContractError::InvalidParameters);
-        }
-    }
-    if *address == env.current_contract_address() {
+    // Same check in tests and production. A missing contract or account does
+    // not exist; the factory's own address exists but must still be rejected.
+    if !address.exists() || *address == env.current_contract_address() {
         return Err(ContractError::InvalidParameters);
     }
     Ok(())

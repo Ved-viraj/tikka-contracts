@@ -158,6 +158,42 @@ fn test_init_factory_rejects_self_admin() {
     assert!(env.events().all().events().is_empty());
 }
 
+fn nonexistent_contract(env: &Env) -> Address {
+    env.deployer()
+        .with_address(Address::generate(env), BytesN::from_array(env, &[9u8; 32]))
+        .deployed_address()
+}
+
+#[test]
+fn test_init_factory_rejects_nonexistent_admin() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let treasury = env.register(RaffleFactory, ());
+    let wasm_hash = BytesN::from_array(&env, &[0u8; 32]);
+    let contract_id = env.register(RaffleFactory, ());
+    let client = RaffleFactoryClient::new(&env, &contract_id);
+
+    assert_eq!(
+        client.try_init_factory(&nonexistent_contract(&env), &wasm_hash, &0u32, &treasury),
+        Err(Ok(ContractError::InvalidParameters))
+    );
+}
+
+#[test]
+fn test_init_factory_rejects_nonexistent_treasury() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = env.register(RaffleFactory, ());
+    let wasm_hash = BytesN::from_array(&env, &[0u8; 32]);
+    let contract_id = env.register(RaffleFactory, ());
+    let client = RaffleFactoryClient::new(&env, &contract_id);
+
+    assert_eq!(
+        client.try_init_factory(&admin, &wasm_hash, &0u32, &nonexistent_contract(&env)),
+        Err(Ok(ContractError::InvalidParameters))
+    );
+}
+
 #[test]
 fn test_init_factory_rejects_self_treasury() {
     let env = Env::default();
@@ -209,6 +245,19 @@ fn test_propose_config_change_rejects_zero_treasury() {
 
     assert_eq!(
         client.try_set_config(&ConfigKey::Treasury, &zero_address(&env)),
+        Err(Ok(ContractError::InvalidParameters))
+    );
+    assert!(env.events().all().events().is_empty());
+}
+
+#[test]
+fn test_set_config_rejects_nonexistent_treasury() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin, _treasury) = setup_factory(&env);
+
+    assert_eq!(
+        client.try_set_config(&ConfigKey::Treasury, &nonexistent_contract(&env)),
         Err(Ok(ContractError::InvalidParameters))
     );
     assert!(env.events().all().events().is_empty());
