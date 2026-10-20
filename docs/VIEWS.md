@@ -51,6 +51,9 @@ The figure is **gross of protocol fees**: the fee is taken out of the charge,
 not added on top, so it is already inside `price_paid`. It is **net of
 refunds**. It is not `tickets_sold * ticket_price`.
 
+The same counter is the volume written to the factory leaderboard when the
+raffle is finalized.
+
 ## Edge-Case Tests
 
 The `tests/views.rs` module covers:

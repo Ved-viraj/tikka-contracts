@@ -71,3 +71,32 @@ fn gross_revenue_matches_price_paid_with_bundles_and_early_bird() {
     assert_eq!(stats.gross_revenue, paid);
     assert_ne!(stats.gross_revenue, stats.tickets_sold as i128 * LIST);
 }
+
+#[test]
+fn leaderboard_volume_equals_tokens_collected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (factory, _admin, _treasury) = setup_factory(&env);
+    let creator = Address::generate(&env);
+    let buyer = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let sac = env.register_stellar_asset_contract_v2(token_admin);
+    let payment_token = sac.address();
+    let token = StellarAssetClient::new(&env, &payment_token);
+    token.mint(&creator, &(LIST * 10));
+    token.mint(&buyer, &(LIST * 10));
+
+    let raffle_address = factory.create_raffle(&creator, &pricing_config(&env, &payment_token));
+    let raffle = RaffleInstanceClient::new(&env, &raffle_address);
+    raffle.deposit_prize();
+    raffle.buy_tickets(&buyer, &5);
+    raffle.buy_tickets(&buyer, &1);
+    raffle.finalize_raffle();
+
+    let paid = sum_price_paid(&env, &raffle_address, 6);
+    let board = factory.get_leaderboard(&LeaderboardMetric::TotalVolume);
+    assert_eq!(board.len(), 1);
+    let entry = board.get(0).unwrap();
+    assert_eq!(entry.0, raffle_address);
+    assert_eq!(entry.1, paid);
+}

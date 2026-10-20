@@ -723,7 +723,13 @@ fn record_leaderboard(env: &Env, raffle: &Raffle) {
     let raffle_id = env.current_contract_address();
 
     let tickets = raffle.tickets_sold;
-    let volume = (tickets as i128).saturating_mul(raffle.ticket_price);
+    // Volume is what buyers were actually charged, kept by `add_gross_revenue`
+    // on each purchase. Pricing stays in `calculate_buy_quote`.
+    let volume: i128 = env
+        .storage()
+        .instance()
+        .get(&DataKey::GrossRevenue)
+        .unwrap_or(0);
 
     let tickets_i128 = tickets as i128;
     let args: Vec<Val> =
