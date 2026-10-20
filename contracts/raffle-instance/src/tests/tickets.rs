@@ -53,7 +53,7 @@ fn buy_tickets_rejects_quantity_above_per_tx_cap() {
         swap_router: None,
         tikka_token: None,
         unique_winners: false,
-            metadata_hash: BytesN::from_array(&env, &[5u8; 32]),
+        metadata_hash: BytesN::from_array(&env, &[5u8; 32]),
         claim_lockup_seconds: None,
         swap_deadline_seconds: None,
         early_bird_ticket_percentage: 0,
@@ -64,7 +64,7 @@ fn buy_tickets_rejects_quantity_above_per_tx_cap() {
         prize_token: None,
         nft_contract: None,
 
-            bundles: soroban_sdk::Vec::new(&env),
+        bundles: soroban_sdk::Vec::new(&env),
     };
 
     client.init(&factory, &admin, &creator, &config);
@@ -74,7 +74,7 @@ fn buy_tickets_rejects_quantity_above_per_tx_cap() {
         client.try_buy_tickets(&buyer, &6),
         Err(Ok(Error::ExceedsMaxTicketsPerTx))
     );
-    assert_eq!(env.events().all().len(), 0);
+    assert_eq!(env.events().all().events().len(), 0);
     assert_eq!(client.buy_tickets(&buyer, &5), 5);
 }
 
@@ -129,7 +129,7 @@ fn buy_tickets_rejects_overflowing_total_price_without_wrapping() {
         prize_token: None,
         nft_contract: None,
 
-            bundles: soroban_sdk::Vec::new(&env),
+        bundles: soroban_sdk::Vec::new(&env),
     };
 
     client.init(&factory, &admin, &creator, &config);
@@ -208,7 +208,7 @@ fn setup_scale_raffle(
         prize_token: None,
         nft_contract: None,
 
-            bundles: soroban_sdk::Vec::new(env),
+        bundles: soroban_sdk::Vec::new(env),
     };
 
     client.init(&factory, &admin, &creator, &config);
@@ -295,7 +295,7 @@ fn admin_can_pause_and_resume_ticket_sales() {
         client.try_buy_tickets(&buyer, &1),
         Err(Ok(Error::ContractPaused))
     );
-    assert_eq!(env.events().all().len(), 0);
+    assert_eq!(env.events().all().events().len(), 0);
 
     client.resume_ticket_sales(&admin);
     assert!(!client.is_ticket_sales_paused());
@@ -343,7 +343,7 @@ fn test_bundle_pricing_applies() {
         swap_router: None,
         tikka_token: None,
         unique_winners: false,
-            metadata_hash: BytesN::from_array(&env, &[9; 32]),
+        metadata_hash: BytesN::from_array(&env, &[9; 32]),
         claim_lockup_seconds: None,
         swap_deadline_seconds: None,
         bundles: soroban_sdk::vec![
@@ -368,7 +368,6 @@ fn test_bundle_pricing_applies() {
         category: None,
         prize_token: None,
         nft_contract: None,
-
     };
 
     client.init(&factory, &admin, &creator, &config);
@@ -403,9 +402,11 @@ fn test_adversarial_ceiling_rounding() {
     let buyer = Address::generate(&env);
 
     let token_admin = Address::generate(&env);
-    let payment_token = env.register_stellar_asset_contract_v2(token_admin.clone()).address();
+    let payment_token = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
     let token_client = StellarAssetClient::new(&env, &payment_token);
-    
+
     // Price = 10,001. Fee = 1 bp (0.01%)
     // floor(10,001 * 1 / 10,000) = 1 (truncating — favours the payer)
     let ticket_price = 10_001i128;
@@ -425,7 +426,7 @@ fn test_adversarial_ceiling_rounding() {
         allow_multiple: true,
         ticket_price: ticket_price,
         payment_token: payment_token.clone(),
-        prize_amount: ticket_price, // 10,001
+        prize_amount: ticket_price,             // 10,001
         prizes: soroban_sdk::vec![&env, 10000], // 100%
         randomness_source: RandomnessSource::Internal,
         oracle_address: None,
@@ -446,28 +447,34 @@ fn test_adversarial_ceiling_rounding() {
         prize_token: None,
         nft_contract: None,
 
-            bundles: soroban_sdk::Vec::new(&env),
+        bundles: soroban_sdk::Vec::new(&env),
     };
 
     client.init(&factory, &admin, &creator, &config);
     client.deposit_prize();
     client.buy_tickets(&buyer, &1);
-    
+
     let expected_ticket_fee = 1i128; // floor(10_001 * 1 / 10_000) = 1 (truncating)
     assert_eq!(client.get_accumulated_fees(), expected_ticket_fee);
-    
+
     client.finalize_raffle();
     let winner = client.get_raffle().winners.get(0).unwrap().address;
     let balance_before = token_client.balance(&winner);
-    
+
     let claimed = client.claim_prize(&winner, &0);
     assert_eq!(claimed, ticket_price); // Gross amount
-    
+
     let expected_prize_fee = 1i128; // floor(10_001 * 1 / 10_000) = 1 (truncating)
-    assert_eq!(client.get_accumulated_fees(), expected_ticket_fee + expected_prize_fee);
-    
+    assert_eq!(
+        client.get_accumulated_fees(),
+        expected_ticket_fee + expected_prize_fee
+    );
+
     let balance_after = token_client.balance(&winner);
-    assert_eq!(balance_after, balance_before + ticket_price - expected_prize_fee);
+    assert_eq!(
+        balance_after,
+        balance_before + ticket_price - expected_prize_fee
+    );
 }
 
 struct TicketSetup<'a> {
@@ -526,7 +533,6 @@ fn setup_per_address_cap(
         prize_token: None,
         nft_contract: None,
         claim_expiry_seconds: None,
-
     };
 
     client.init(&factory, &admin, &creator, &config);
@@ -700,7 +706,6 @@ fn cap_cannot_exceed_max_tickets() {
         prize_token: None,
         nft_contract: None,
         claim_expiry_seconds: None,
-
     };
 
     assert_eq!(
@@ -782,13 +787,16 @@ fn setup_with_deadline(env: &Env, end_time: u64) -> DeadlineSetup<'_> {
         prize_token: None,
         nft_contract: None,
         claim_expiry_seconds: None,
-
     };
 
     client.init(&factory, &admin, &creator, &config);
     client.deposit_prize();
 
-    DeadlineSetup { client, buyer, recipient }
+    DeadlineSetup {
+        client,
+        buyer,
+        recipient,
+    }
 }
 
 // --- buy_tickets: end_time is an exclusive boundary ---
@@ -838,7 +846,9 @@ fn buy_tickets_for_succeeds_just_before_end_time() {
     let setup = setup_with_deadline(&env, 1_000);
     env.ledger().set_timestamp(999);
     assert_eq!(
-        setup.client.buy_tickets_for(&setup.buyer, &setup.recipient, &1),
+        setup
+            .client
+            .buy_tickets_for(&setup.buyer, &setup.recipient, &1),
         1
     );
 }
@@ -850,7 +860,9 @@ fn buy_tickets_for_rejected_exactly_at_end_time() {
     let setup = setup_with_deadline(&env, 1_000);
     env.ledger().set_timestamp(1_000);
     assert_eq!(
-        setup.client.try_buy_tickets_for(&setup.buyer, &setup.recipient, &1),
+        setup
+            .client
+            .try_buy_tickets_for(&setup.buyer, &setup.recipient, &1),
         Err(Ok(Error::RaffleExpired))
     );
 }
@@ -862,7 +874,9 @@ fn buy_tickets_for_rejected_after_end_time() {
     let setup = setup_with_deadline(&env, 1_000);
     env.ledger().set_timestamp(1_001);
     assert_eq!(
-        setup.client.try_buy_tickets_for(&setup.buyer, &setup.recipient, &1),
+        setup
+            .client
+            .try_buy_tickets_for(&setup.buyer, &setup.recipient, &1),
         Err(Ok(Error::RaffleExpired))
     );
 }

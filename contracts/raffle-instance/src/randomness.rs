@@ -71,7 +71,9 @@ pub fn derive_random_seed_from_proof(env: &Env, proof: &BytesN<64>) -> u64 {
     let proof_bytes: Bytes = Bytes::from_array(env, &proof.to_array());
     let hash: BytesN<32> = env.crypto().sha256(&proof_bytes).into();
     let arr = hash.to_array();
-    u64::from_be_bytes([arr[0], arr[1], arr[2], arr[3], arr[4], arr[5], arr[6], arr[7]])
+    u64::from_be_bytes([
+        arr[0], arr[1], arr[2], arr[3], arr[4], arr[5], arr[6], arr[7],
+    ])
 }
 
 /// Oracle-backed winner selection using an externally provided VRF seed.
@@ -295,12 +297,9 @@ impl OracleSeedWinnerSelection {
             // `remaining >= 1` holds for every iteration, and
             // `(u64::MAX / remaining) * remaining <= u64::MAX`, so the
             // `wrapping_*` forms below cannot actually wrap.
-            let largest_multiple_remaining =
-                (u64::MAX / remaining).wrapping_mul(remaining);
-            let mut candidate = loop {
             let largest_multiple_remaining = (u64::MAX / remaining) * remaining;
             let candidate = loop {
-                if current_seed < largest_multiple {
+                if current_seed < largest_multiple_remaining {
                     break current_seed;
                 }
                 current_seed = current_seed
@@ -721,9 +720,8 @@ mod tests {
         let contract = env
             .register_stellar_asset_contract_v2(Address::generate(&env))
             .address();
-        let on_chain_indices = env.as_contract(&contract, || {
-            strategy.select_winner_indices(&env, 100, 5)
-        });
+        let on_chain_indices =
+            env.as_contract(&contract, || strategy.select_winner_indices(&env, 100, 5));
         assert_eq!(on_chain_indices.len(), 5, "on-chain: expected 5 winners");
         let mut seen2 = std::collections::HashSet::new();
         for i in 0..on_chain_indices.len() {
@@ -744,9 +742,7 @@ mod tests {
             .register_stellar_asset_contract_v2(Address::generate(&env))
             .address();
         let strategy = OracleSeedWinnerSelection::new(42);
-        let indices = env.as_contract(&contract, || {
-            strategy.select_winner_indices(&env, 100, 1)
-        });
+        let indices = env.as_contract(&contract, || strategy.select_winner_indices(&env, 100, 1));
         assert_eq!(indices.len(), 1);
         assert!(indices.get(0).unwrap() < 100);
     }
@@ -759,9 +755,7 @@ mod tests {
             .address();
         let request_id = 12345u64;
 
-        let msg = env.as_contract(&contract, || {
-            build_vrf_proof_message(&env, request_id)
-        });
+        let msg = env.as_contract(&contract, || build_vrf_proof_message(&env, request_id));
 
         // The message must equal the XDR encoding of (contract_address, request_id)
         let expected: Bytes = (contract, request_id).to_xdr(&env);
@@ -777,7 +771,9 @@ mod tests {
         let proof_bytes: Bytes = Bytes::from_array(&env, &proof.to_array());
         let hash: BytesN<32> = env.crypto().sha256(&proof_bytes).into();
         let arr = hash.to_array();
-        let expected_seed = u64::from_be_bytes([arr[0], arr[1], arr[2], arr[3], arr[4], arr[5], arr[6], arr[7]]);
+        let expected_seed = u64::from_be_bytes([
+            arr[0], arr[1], arr[2], arr[3], arr[4], arr[5], arr[6], arr[7],
+        ]);
 
         assert_eq!(seed, expected_seed);
         assert_ne!(seed, 0);

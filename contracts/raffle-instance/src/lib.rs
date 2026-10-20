@@ -7,16 +7,15 @@
 extern crate std;
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype,
-    Address, BytesN, Env, String, Vec,
+    contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, String, Vec,
 };
 
-#[cfg(test)]
-use soroban_sdk::{token, Bytes};
 #[cfg(test)]
 use soroban_sdk::testutils::Address as _;
 #[cfg(test)]
 use soroban_sdk::vec;
+#[cfg(test)]
+use soroban_sdk::{token, Bytes};
 
 mod admin;
 mod attestation;
@@ -29,12 +28,12 @@ mod randomness;
 mod tickets;
 mod views;
 
-pub(crate) use helpers::{
-    calculate_tier_prize, read_raffle, require_admin, require_global_not_paused,
-    transition_status, validate_token_address, write_raffle, Guard,
-};
 #[cfg(any(test, feature = "testutils"))]
 pub use helpers::assert_solvent;
+pub(crate) use helpers::{
+    calculate_tier_prize, read_raffle, require_admin, require_global_not_paused, transition_status,
+    validate_token_address, write_raffle, Guard,
+};
 
 #[cfg(any(test, feature = "testutils"))]
 fn assert_solvent_after_success<T>(env: &Env, result: &Result<T, Error>) {
@@ -47,29 +46,15 @@ use raffle_shared::{
     constants::{
         DEFAULT_CLAIM_EXPIRY_SECONDS, DEFAULT_CLAIM_LOCKUP_SECONDS, DEFAULT_SWAP_DEADLINE_SECONDS,
         EMERGENCY_WITHDRAW_DELAY_SECONDS, MAX_CLAIM_LOCKUP_SECONDS, MAX_DESCRIPTION_LENGTH,
-        MAX_PRIZES, MAX_PRIZE_AMOUNT, MAX_PROTOCOL_FEE_BP,
-        MAX_SWAP_DEADLINE_SECONDS, MAX_TICKETS_LIMIT, MIN_CLAIM_EXPIRY_SECONDS, MIN_TICKET_PRICE,
-        ORACLE_TIMEOUT_LEDGERS, RANDOMNESS_MIN_DELAY_LEDGERS,
+        MAX_PRIZES, MAX_PRIZE_AMOUNT, MAX_PROTOCOL_FEE_BP, MAX_SWAP_DEADLINE_SECONDS,
+        MAX_TICKETS_LIMIT, MIN_CLAIM_EXPIRY_SECONDS, MIN_TICKET_PRICE, ORACLE_TIMEOUT_LEDGERS,
+        RANDOMNESS_MIN_DELAY_LEDGERS,
     },
     exceeds_internal_randomness_cap, BuyQuote, CancelReason, FairnessData, QuorumConfig,
     RaffleConfig, RaffleStats, RaffleStatus, RandomnessSource, RandomnessType, Ticket,
 };
 
-use self::randomness::{
-    build_vrf_proof_message, OracleSeedWinnerSelection, WinnerSelectionStrategy,
-};
-
-use crate::events::{
-    CancelScheduled, ContractPaused, ContractUnpaused, DrawTriggered, EmergencyWithdrawn,
-    FeesWithdrawn, MetadataHashUpdated, OracleAddressUpdated, OracleSeedDelivered, PrizeClaimed,
-    PrizeDeposited, PrizeRefunded, ProtocolFeeUpdated, RaffleCancelled, RaffleCreated,
-    RaffleFailed, RaffleFinalized, RaffleStatusChanged, RandomnessFallbackTriggered,
-    RandomnessReceived, RandomnessRequested, StorageWiped, SwapDeadlineUpdated, TicketNftMinted,
-    TicketPurchased, TicketRefunded, TicketSalesPaused, TicketSalesResumed, TokensRescued,
-    WinnerDrawn,
-};
-
-const RANDOMNESS_MIN_DELAY_LEDGERS: u32 = 10;
+use crate::events::{OracleSeedDelivered, RaffleCreated};
 
 #[contract]
 pub struct RaffleInstance;
@@ -250,7 +235,7 @@ pub struct CommitRevealEntry {
 // and frontend messages). Exporting the spec would make the derive panic with
 // `LengthExceedsMax`, so the spec entry is omitted while every code and name
 // is preserved.
-#[contracterror(export = false)]
+#[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub enum Error {
     RaffleInactive = 2,
@@ -299,7 +284,7 @@ pub enum Error {
     RandomnessTooEarly = 64,
     CancelTimelockActive = 67,
     CancelNotScheduled = 66,
-    ExceedsMaxTicketsPerAddress = 67,
+    ExceedsMaxTicketsPerAddress = 65,
     OracleNotRegistered = 68,
     DuplicateOracleSubmission = 69,
     CommitAlreadySubmitted = 70,
@@ -319,6 +304,12 @@ pub enum Error {
     /// Configured randomness source is too weak for the configured prize
     /// amount. Code 76.
     RandomnessSourceTooWeakForPrize = 76,
+    /// A prize tier was already swept to the treasury. Code 77.
+    PrizeSwept = 77,
+    /// An admin transfer is already pending. Code 78.
+    AdminTransferPending = 78,
+    /// Accept was called with no pending admin transfer. Code 79.
+    NoPendingTransfer = 79,
 }
 
 /// Returns the effective per-address ticket cap, if any.
@@ -391,8 +382,7 @@ impl RaffleInstance {
         if config.max_tickets_per_tx == 0 || config.max_tickets_per_tx > config.max_tickets {
             return Err(Error::InvalidParameters);
         }
-        if config.max_tickets_per_address > 0
-            && config.max_tickets_per_address > config.max_tickets
+        if config.max_tickets_per_address > 0 && config.max_tickets_per_address > config.max_tickets
         {
             return Err(Error::InvalidParameters);
         }
@@ -438,7 +428,7 @@ impl RaffleInstance {
             return Err(Error::InvalidParameters);
         }
 
-if config.randomness_source == RandomnessSource::External {
+        if config.randomness_source == RandomnessSource::External {
             match config.oracle_address {
                 None => return Err(Error::InvalidParameters),
                 Some(ref addr) if *addr == env.current_contract_address() => {
@@ -508,12 +498,16 @@ if config.randomness_source == RandomnessSource::External {
         }
 
         // #259: claim_lockup_seconds must be within [0, MAX_CLAIM_LOCKUP_SECONDS].
-        let claim_lockup = config.claim_lockup_seconds.unwrap_or(DEFAULT_CLAIM_LOCKUP_SECONDS);
+        let claim_lockup = config
+            .claim_lockup_seconds
+            .unwrap_or(DEFAULT_CLAIM_LOCKUP_SECONDS);
         if claim_lockup > MAX_CLAIM_LOCKUP_SECONDS {
             return Err(Error::InvalidParameters);
         }
 
-        let claim_expiry = config.claim_expiry_seconds.unwrap_or(DEFAULT_CLAIM_EXPIRY_SECONDS);
+        let claim_expiry = config
+            .claim_expiry_seconds
+            .unwrap_or(DEFAULT_CLAIM_EXPIRY_SECONDS);
         if claim_expiry < MIN_CLAIM_EXPIRY_SECONDS {
             return Err(Error::InvalidParameters);
         }
@@ -522,7 +516,9 @@ if config.randomness_source == RandomnessSource::External {
         }
 
         // Swap deadline must be within [0, MAX_SWAP_DEADLINE_SECONDS].
-        let swap_deadline = config.swap_deadline_seconds.unwrap_or(DEFAULT_SWAP_DEADLINE_SECONDS);
+        let swap_deadline = config
+            .swap_deadline_seconds
+            .unwrap_or(DEFAULT_SWAP_DEADLINE_SECONDS);
         if swap_deadline > MAX_SWAP_DEADLINE_SECONDS {
             return Err(Error::InvalidParameters);
         }
@@ -662,7 +658,8 @@ if config.randomness_source == RandomnessSource::External {
         proof: BytesN<64>,
         request_id: u64,
     ) -> Result<Address, Error> {
-        let result = draw::provide_randomness(env.clone(), random_seed, public_key, proof, request_id);
+        let result =
+            draw::provide_randomness(env.clone(), random_seed, public_key, proof, request_id);
         #[cfg(any(test, feature = "testutils"))]
         assert_solvent_after_success(&env, &result);
         result
@@ -743,7 +740,11 @@ if config.randomness_source == RandomnessSource::External {
         }
 
         // Dedup: reject if this oracle already submitted.
-        if env.storage().persistent().has(&DataKey::QuorumSeed(caller.clone())) {
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::QuorumSeed(caller.clone()))
+        {
             return Err(Error::DuplicateOracleSubmission);
         }
 
@@ -793,12 +794,16 @@ if config.randomness_source == RandomnessSource::External {
             }
 
             let aggregate = randomness::aggregate_quorum_seeds(&env, request_id, &seeds);
-            helpers::do_finalize_with_seed(&env, raffle, aggregate, RandomnessType::Quorum, Some(seeds))?;
+            helpers::do_finalize_with_seed(
+                &env,
+                raffle,
+                aggregate,
+                RandomnessType::Quorum,
+                Some(seeds),
+            )?;
         }
 
-        #[cfg(any(test, feature = "testutils"))]
-        assert_solvent_after_success(&env, &result);
-        result
+        Ok(())
     }
 
     /// Open a ticket-holder commit made while the raffle was `Active` for the
@@ -831,11 +836,7 @@ if config.randomness_source == RandomnessSource::External {
     /// Permissionless sweep of unclaimed prizes to treasury after `claim_expiry_seconds`
     /// has elapsed since finalization.  Processes at most `limit` tiers starting at
     /// `start_index`.  Returns the number of prizes swept in this call.
-    pub fn sweep_unclaimed(
-        env: Env,
-        start_index: u32,
-        limit: u32,
-    ) -> Result<u32, Error> {
+    pub fn sweep_unclaimed(env: Env, start_index: u32, limit: u32) -> Result<u32, Error> {
         let result = crate::claim::sweep_unclaimed(env.clone(), start_index, limit);
         #[cfg(any(test, feature = "testutils"))]
         assert_solvent_after_success(&env, &result);
@@ -935,9 +936,7 @@ if config.randomness_source == RandomnessSource::External {
     /// otherwise.
     ///
     /// See [`docs/RANDOMNESS.md`](../../../docs/RANDOMNESS.md) for the verification procedure.
-    pub fn get_draw_attestation(
-        env: Env,
-    ) -> Result<attestation::DrawAttestation, Error> {
+    pub fn get_draw_attestation(env: Env) -> Result<attestation::DrawAttestation, Error> {
         attestation::get_draw_attestation(&env)
     }
 
@@ -993,10 +992,7 @@ if config.randomness_source == RandomnessSource::External {
         views::is_ticket_sales_paused(env)
     }
 
-    pub fn get_remaining_ticket_allowance(
-        env: Env,
-        owner: Address,
-    ) -> Result<u32, Error> {
+    pub fn get_remaining_ticket_allowance(env: Env, owner: Address) -> Result<u32, Error> {
         views::get_remaining_ticket_allowance(env, owner)
     }
 
@@ -1039,7 +1035,11 @@ if config.randomness_source == RandomnessSource::External {
         result
     }
 
-    pub fn update_oracle_address(env: Env, new_oracle: Address, new_public_key: Option<BytesN<32>>) -> Result<(), Error> {
+    pub fn update_oracle_address(
+        env: Env,
+        new_oracle: Address,
+        new_public_key: Option<BytesN<32>>,
+    ) -> Result<(), Error> {
         let result = admin::update_oracle_address(env.clone(), new_oracle, new_public_key);
         #[cfg(any(test, feature = "testutils"))]
         assert_solvent_after_success(&env, &result);
@@ -1085,7 +1085,11 @@ if config.randomness_source == RandomnessSource::External {
             raffle_shared::constants::INSTANCE_TTL_THRESHOLD_LEDGERS,
             raffle_shared::constants::INSTANCE_TTL_BUMP_LEDGERS,
         );
-        Ok(crate::helpers::extend_ticket_ttls(&env, start_ticket_id, limit))
+        Ok(crate::helpers::extend_ticket_ttls(
+            &env,
+            start_ticket_id,
+            limit,
+        ))
     }
 }
 

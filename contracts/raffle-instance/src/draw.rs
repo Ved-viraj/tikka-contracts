@@ -1,22 +1,17 @@
 use soroban_sdk::{xdr::ToXdr, Address, Bytes, BytesN, Env, Vec};
 
 use raffle_shared::{
-    constants::MIN_COMMITS_FOR_DRAW,
-    CancelReason, FailureReason, QuorumConfig, RandomnessSource, RandomnessType,
+    constants::MIN_COMMITS_FOR_DRAW, CancelReason, FailureReason, QuorumConfig, RandomnessSource,
+    RandomnessType,
 };
 
 use crate::events::{
-    DrawTriggered, OracleSeedDelivered, RaffleCancelled, RaffleFailed,
-    RandomnessFallbackTriggered, RandomnessReceived, RandomnessRequested,
+    DrawTriggered, OracleSeedDelivered, RaffleCancelled, RaffleFailed, RandomnessFallbackTriggered,
+    RandomnessReceived, RandomnessRequested,
 };
 use crate::helpers::{
     build_internal_seed_u64, do_finalize_with_seed, read_raffle, request_randomness,
     require_awaiting_randomness, revert_status, transition_status, transition_to_drawing,
-};
-use crate::randomness::{build_vrf_proof_message, derive_random_seed_from_proof};
-use crate::{
-    CommitRevealEntry, DataKey, Error, RaffleStatus, ORACLE_TIMEOUT_LEDGERS,
-    RANDOMNESS_MIN_DELAY_LEDGERS,
 };
 use crate::randomness::{build_vrf_proof_message, derive_random_seed_from_proof};
 use crate::{
@@ -132,9 +127,7 @@ pub(crate) fn finalize_raffle(env: Env) -> Result<(), Error> {
                 if !already_drawing {
                     revert_status(&env, &mut raffle, pre_status)?;
                 }
-                env.storage()
-                    .instance()
-                    .set(&DataKey::DrawingLock, &false);
+                env.storage().instance().set(&DataKey::DrawingLock, &false);
                 return Err(err);
             }
         }
@@ -165,9 +158,7 @@ pub(crate) fn finalize_raffle(env: Env) -> Result<(), Error> {
                 if !already_drawing {
                     revert_status(&env, &mut raffle, pre_status)?;
                 }
-                env.storage()
-                    .instance()
-                    .set(&DataKey::DrawingLock, &false);
+                env.storage().instance().set(&DataKey::DrawingLock, &false);
                 return Err(err);
             }
         }
@@ -238,8 +229,12 @@ pub(crate) fn clear_quorum_storage(env: &Env) {
     {
         for i in 0..submitted.len() {
             if let Some(addr) = submitted.get(i) {
-                env.storage().persistent().remove(&DataKey::QuorumSeed(addr.clone()));
-                env.storage().persistent().remove(&DataKey::QuorumCommit(addr.clone()));
+                env.storage()
+                    .persistent()
+                    .remove(&DataKey::QuorumSeed(addr.clone()));
+                env.storage()
+                    .persistent()
+                    .remove(&DataKey::QuorumCommit(addr.clone()));
             }
         }
     }
@@ -432,6 +427,7 @@ fn is_registered(oracles: &Vec<Address>, oracle: &Address) -> bool {
 
 /// `sha256(seed_be || oracle_address_xdr || request_id_be)` — the commitment
 /// an oracle must publish in phase 1 before it may reveal `seed`.
+#[allow(dead_code)]
 fn quorum_commit_hash(env: &Env, oracle: &Address, seed: u64, request_id: u64) -> BytesN<32> {
     let mut preimage = Bytes::new(env);
     preimage.extend_from_array(&seed.to_be_bytes());
@@ -490,6 +486,7 @@ pub(crate) fn provide_quorum_commit(
 /// rejects *any* reveal until `k` commitments are on record so that all
 /// submitters commit before anybody sees a pre-image.  The raffle is
 /// finalized on the k-th valid reveal.
+#[allow(dead_code)]
 pub(crate) fn provide_quorum_randomness(
     env: Env,
     oracle: Address,
@@ -553,22 +550,16 @@ pub(crate) fn provide_quorum_randomness(
     .publish(&env);
 
     if count >= k {
-        let aggregate = crate::randomness::aggregate_quorum_seeds(&env, &seeds);
-        do_finalize_with_seed(
-            &env,
-            raffle,
-            aggregate,
-            RandomnessType::Quorum,
-            Some(seeds),
-        )?;
+        let aggregate = crate::randomness::aggregate_quorum_seeds(&env, request_id, &seeds);
+        do_finalize_with_seed(&env, raffle, aggregate, RandomnessType::Quorum, Some(seeds))?;
     }
 
     Ok(())
 }
 
-        let aggregate = randomness::aggregate_quorum_seeds(&env, request_id, &seeds);
-        crate::helpers::do_finalize_with_seed(&env, raffle, aggregate, RandomnessType::Quorum, Some(seeds))?;
-    }
+/// Open a commit-reveal pre-image recorded while the raffle was active.
+pub(crate) fn reveal_commit(env: Env, ticket_id: u32, preimage: BytesN<32>) -> Result<(), Error> {
+    let raffle = read_raffle(&env)?;
     if raffle.status != RaffleStatus::Active && raffle.status != RaffleStatus::Drawing {
         return Err(Error::InvalidStatus);
     }

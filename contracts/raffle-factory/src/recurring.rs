@@ -72,18 +72,14 @@
 //!    - Existing raffle instances already deployed across past rounds remain unaffected.
 //!    - Emits [`events::RecurringRaffleCancelled`].
 
-use soroban_sdk::{
-    contractimpl, contracttype, Address, Env, Vec,
-};
+use soroban_sdk::{contractimpl, contracttype, Address, Env, Vec};
 
-use raffle_shared::constants::{
-    MAX_RECURRING_INTERVAL_SECONDS, MIN_RECURRING_INTERVAL_SECONDS,
-};
+use raffle_shared::constants::{MAX_RECURRING_INTERVAL_SECONDS, MIN_RECURRING_INTERVAL_SECONDS};
 use raffle_shared::{RaffleConfigBuilder, RecurringRaffleConfig};
 
 use crate::events;
 use crate::registry::PartnerStats;
-use crate::{ContractError, DataKey, RaffleFactory};
+use crate::{ContractError, DataKey, RaffleFactory, RaffleFactoryArgs, RaffleFactoryClient};
 
 /// On-chain state for a recurring raffle schedule.
 #[derive(Clone)]
@@ -160,12 +156,14 @@ impl RaffleFactory {
         env.storage()
             .persistent()
             .set(&RecurringDataKey::RecurringRaffle(recurring_id), &entry);
-        env.storage()
-            .persistent()
-            .set(&RecurringDataKey::NextRecurringId, &(recurring_id.saturating_add(1)));
-        env.storage()
-            .persistent()
-            .set(&RecurringDataKey::RecurringRaffleInstances(recurring_id), &Vec::<Address>::new(&env));
+        env.storage().persistent().set(
+            &RecurringDataKey::NextRecurringId,
+            &(recurring_id.saturating_add(1)),
+        );
+        env.storage().persistent().set(
+            &RecurringDataKey::RecurringRaffleInstances(recurring_id),
+            &Vec::<Address>::new(&env),
+        );
 
         events::RecurringRaffleCreated {
             recurring_id,
@@ -192,10 +190,7 @@ impl RaffleFactory {
     /// - [`ContractError::RecurringInactive`] if the schedule was cancelled.
     /// - [`ContractError::IntervalNotElapsed`] if the current timestamp is before `next_due`.
     /// - [`ContractError::MaxRoundsReached`] if `max_rounds > 0` and `current_round >= max_rounds`.
-    pub fn trigger_next_round(
-        env: Env,
-        recurring_id: u32,
-    ) -> Result<Address, ContractError> {
+    pub fn trigger_next_round(env: Env, recurring_id: u32) -> Result<Address, ContractError> {
         crate::require_factory_not_paused(&env)?;
 
         let mut entry: RecurringRaffleEntry = env
@@ -220,11 +215,7 @@ impl RaffleFactory {
         let config = RaffleConfigBuilder::from_config(&env, entry.config.base_config.clone())
             .build()
             .map_err(|_| ContractError::InvalidParameters)?;
-        let raffle_address = crate::create_raffle_internal(
-            &env,
-            entry.creator.clone(),
-            config,
-        )?;
+        let raffle_address = crate::create_raffle_internal(&env, entry.creator.clone(), config)?;
 
         entry.current_round = entry.current_round.saturating_add(1);
         entry.next_due = now.saturating_add(entry.config.interval_seconds);
@@ -236,9 +227,10 @@ impl RaffleFactory {
             .get(&RecurringDataKey::RecurringRaffleInstances(recurring_id))
             .unwrap_or_else(|| Vec::new(&env));
         instances.push_back(raffle_address.clone());
-        env.storage()
-            .persistent()
-            .set(&RecurringDataKey::RecurringRaffleInstances(recurring_id), &instances);
+        env.storage().persistent().set(
+            &RecurringDataKey::RecurringRaffleInstances(recurring_id),
+            &instances,
+        );
 
         env.storage()
             .persistent()
@@ -255,7 +247,10 @@ impl RaffleFactory {
 
         // --- partner dashboard stats (#488) ---
         let creator = entry.creator.clone();
-        let is_whitelisted = env.storage().persistent().has(&DataKey::WhitelistedPartner(creator.clone()));
+        let is_whitelisted = env
+            .storage()
+            .persistent()
+            .has(&DataKey::WhitelistedPartner(creator.clone()));
         if is_whitelisted {
             let now = env.ledger().timestamp();
             let mut stats: PartnerStats = env
@@ -310,15 +305,13 @@ impl RaffleFactory {
         }
         caller.require_auth();
 
-        env.storage()
-            .persistent()
-            .set(
-                &RecurringDataKey::RecurringRaffle(recurring_id),
-                &RecurringRaffleEntry {
-                    active: false,
-                    ..entry
-                },
-            );
+        env.storage().persistent().set(
+            &RecurringDataKey::RecurringRaffle(recurring_id),
+            &RecurringRaffleEntry {
+                active: false,
+                ..entry
+            },
+        );
 
         events::RecurringRaffleCancelled {
             recurring_id,
@@ -339,10 +332,7 @@ impl RaffleFactory {
     }
 
     /// Retrieve all raffle instance addresses deployed by a recurring schedule.
-    pub fn get_recurring_instances(
-        env: Env,
-        recurring_id: u32,
-    ) -> Vec<Address> {
+    pub fn get_recurring_instances(env: Env, recurring_id: u32) -> Vec<Address> {
         env.storage()
             .persistent()
             .get(&RecurringDataKey::RecurringRaffleInstances(recurring_id))

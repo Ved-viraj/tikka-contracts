@@ -47,12 +47,11 @@ fn non_winner_cannot_claim() {
     env.ledger()
         .set_timestamp(2_000 + DEFAULT_CLAIM_LOCKUP_SECONDS + 1);
 
-    let start_events = env.events().all().len();
+    let start_events = env.events().all().events().len();
     let result = client.try_claim_prize(&attacker, &0u32);
-    assert_eq!(env.events().all().len(), start_events);
+    assert_eq!(env.events().all().events().len(), start_events);
     assert_eq!(result, Err(Ok(Error::NotWinner)));
 }
-
 
 #[test]
 fn test_refund_guard_released_after_success() {
@@ -84,12 +83,11 @@ fn test_refund_guard_released_after_success() {
 
     client.init(&factory, &admin, &creator, &config);
 
-    let start_events = env.events().all().len();
+    let start_events = env.events().all().events().len();
     let result = client.try_emergency_withdraw(&creator);
-    assert_eq!(env.events().all().len(), start_events);
+    assert_eq!(env.events().all().events().len(), start_events);
     assert_eq!(result.err(), Some(Ok(Error::PrizeNotDeposited)));
 }
-
 
 #[test]
 fn test_claim_prize_deducts_protocol_fee() {
@@ -138,7 +136,10 @@ fn test_claim_prize_deducts_protocol_fee() {
     let claimed = client.claim_prize(&winner, &0);
 
     assert_eq!(claimed, gross);
-    assert_eq!(token_client.balance(&winner), balance_before + gross - prize_fee);
+    assert_eq!(
+        token_client.balance(&winner),
+        balance_before + gross - prize_fee
+    );
     assert_eq!(token_client.balance(&treasury), 1_000 + prize_fee);
 }
 
@@ -190,7 +191,10 @@ fn test_refund_ticket_credits_payer_not_owner() {
     let refunded = client.refund_ticket(&payer, &0);
 
     assert_eq!(refunded, MIN_TICKET_PRICE);
-    assert_eq!(token_client.balance(&payer), payer_before + MIN_TICKET_PRICE);
+    assert_eq!(
+        token_client.balance(&payer),
+        payer_before + MIN_TICKET_PRICE
+    );
     assert_eq!(token_client.balance(&recipient), owner_before);
 }
 
@@ -242,5 +246,3 @@ fn test_batch_refund_tickets_credits_payer_not_owner() {
     );
     assert_eq!(token_client.balance(&recipient), owner_before);
 }
-
-

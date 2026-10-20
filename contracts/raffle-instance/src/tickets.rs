@@ -39,12 +39,12 @@ use soroban_sdk::{
     token, Address, BytesN, Env, IntoVal, Symbol, Val, Vec,
 };
 
-use raffle_shared::{apply_bp, RandomnessSource, Ticket};
+use raffle_shared::{RandomnessSource, Ticket};
 
 use crate::events::{DrawTriggered, RandomnessRequested, TicketPurchased};
 use crate::helpers::{
-    bump_raffle_ttl, calculate_buy_quote, Guard, request_randomness, require_not_paused,
-    transition_to_drawing,
+    bump_raffle_ttl, calculate_buy_quote, request_randomness,
+    require_not_paused, transition_to_drawing, Guard,
 };
 use crate::{CommitRevealEntry, DataKey, Error, Raffle, RaffleStatus};
 
@@ -284,7 +284,6 @@ pub(crate) fn buy_tickets(env: Env, buyer: Address, quantity: u32) -> Result<u32
     raffle.tickets_sold = snapshot_sold
         .checked_add(quantity)
         .ok_or(Error::ArithmeticOverflow)?;
-
     //  7. transition_to_drawing and request_randomness (if needed)
     if raffle.tickets_sold >= raffle.max_tickets {
         transition_to_drawing(&env, &mut raffle, timestamp)?;
@@ -394,12 +393,21 @@ pub(crate) fn buy_tickets(env: Env, buyer: Address, quantity: u32) -> Result<u32
 ///   at `ledger_timestamp == end_time` (see `docs/GLOSSARY.md` § "End Time").
 ///
 /// See [`buy_tickets`] for the full error list and event documentation.
-pub(crate) fn buy_tickets_for(env: Env, buyer: Address, recipient: Address, quantity: u32) -> Result<u32, Error> {
+pub(crate) fn buy_tickets_for(
+    env: Env,
+    buyer: Address,
+    recipient: Address,
+    quantity: u32,
+) -> Result<u32, Error> {
     //  1. Take reentrancy guard FIRST
     let _guard = Guard::new(&env)?;
 
     //  2. Validate inputs
-    let drawing_lock: bool = env.storage().instance().get(&crate::DataKey::DrawingLock).unwrap_or(false);
+    let drawing_lock: bool = env
+        .storage()
+        .instance()
+        .get(&crate::DataKey::DrawingLock)
+        .unwrap_or(false);
     if drawing_lock {
         return Err(Error::DrawingAlreadyInProgress);
     }
@@ -457,18 +465,6 @@ pub(crate) fn buy_tickets_for(env: Env, buyer: Address, recipient: Address, quan
     }
 
     let timestamp = env.ledger().timestamp();
-        fix/security-checks-effects-763
-    let ticket_total = raffle
-        .ticket_price
-        .checked_mul(quantity as i128)
-        .ok_or(Error::ArithmeticOverflow)?;
-    let protocol_fee = apply_bp(ticket_total, raffle.protocol_fee_bp)
-        .ok_or(Error::ArithmeticOverflow)?;
-
-    let total_price = ticket_total
-        .checked_add(protocol_fee)
-        .ok_or(Error::ArithmeticOverflow)?;
-        master
     let quote = calculate_buy_quote(&raffle, quantity)?;
     let total_price = quote.net_to_pay;
     let protocol_fee = quote.fee;
@@ -559,7 +555,6 @@ pub(crate) fn buy_tickets_for(env: Env, buyer: Address, recipient: Address, quan
     raffle.tickets_sold = snapshot_sold
         .checked_add(quantity)
         .ok_or(Error::ArithmeticOverflow)?;
-
     //  7. transition_to_drawing and request_randomness (if needed)
     if raffle.tickets_sold >= raffle.max_tickets {
         transition_to_drawing(&env, &mut raffle, timestamp)?;

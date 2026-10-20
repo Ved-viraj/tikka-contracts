@@ -126,9 +126,9 @@ fn test_oracle_fallback_with_ledger_delays() {
     assert_eq!(raffle.status, RaffleStatus::Drawing);
 
     // 6. Attempt fallback too early
-    let start_events = env.events().all().len();
+    let start_events = env.events().all().events().len();
     let result = client.try_trigger_randomness_fallback(&creator, &false);
-    assert_eq!(env.events().all().len(), start_events);
+    assert_eq!(env.events().all().events().len(), start_events);
     assert_eq!(result.err(), Some(Ok(Error::FallbackTooEarly)));
 
     // 7. Simulate ledger delays
@@ -341,9 +341,9 @@ fn non_winner_cannot_claim() {
     env.ledger()
         .set_timestamp(2_000 + DEFAULT_CLAIM_LOCKUP_SECONDS + 1);
 
-    let start_events = env.events().all().len();
+    let start_events = env.events().all().events().len();
     let result = client.try_claim_prize(&attacker, &0u32);
-    assert_eq!(env.events().all().len(), start_events);
+    assert_eq!(env.events().all().events().len(), start_events);
     assert_eq!(result, Err(Ok(Error::NotWinner)));
 }
 
@@ -395,12 +395,12 @@ fn buy_tickets_rejects_quantity_above_per_tx_cap() {
     client.init(&factory, &admin, &creator, &config);
     client.deposit_prize();
 
-    let start_events = env.events().all().len();
+    let start_events = env.events().all().events().len();
     assert_eq!(
         client.try_buy_tickets(&buyer, &6),
         Err(Ok(Error::ExceedsMaxTicketsPerTx))
     );
-    assert_eq!(env.events().all().len(), start_events);
+    assert_eq!(env.events().all().events().len(), start_events);
     assert_eq!(client.buy_tickets(&buyer, &5), 5);
 }
 
@@ -740,12 +740,12 @@ fn admin_can_pause_and_resume_ticket_sales() {
 
     client.pause_ticket_sales(&admin);
     assert!(client.is_ticket_sales_paused());
-    let start_events = env.events().all().len();
+    let start_events = env.events().all().events().len();
     assert_eq!(
         client.try_buy_tickets(&buyer, &1),
         Err(Ok(Error::ContractPaused))
     );
-    assert_eq!(env.events().all().len(), start_events);
+    assert_eq!(env.events().all().events().len(), start_events);
 
     client.resume_ticket_sales(&admin);
     assert!(!client.is_ticket_sales_paused());
@@ -897,9 +897,9 @@ fn emergency_withdraw_fails_before_delay_in_finalized_state() {
     client.buy_tickets(&creator, &1);
     client.finalize_raffle();
 
-    let start_events = env.events().all().len();
+    let start_events = env.events().all().events().len();
     let result = client.try_emergency_withdraw(&creator);
-    assert_eq!(env.events().all().len(), start_events);
+    assert_eq!(env.events().all().events().len(), start_events);
     assert_eq!(result.err(), Some(Ok(Error::InvalidStatus)));
 }
 
@@ -1017,9 +1017,9 @@ fn emergency_withdraw_fails_for_no_deadline_raffle_before_timeout() {
     client.buy_tickets(&creator, &1);
     client.finalize_raffle();
 
-    let start_events = env.events().all().len();
+    let start_events = env.events().all().events().len();
     let result = client.try_emergency_withdraw(&creator);
-    assert_eq!(env.events().all().len(), start_events);
+    assert_eq!(env.events().all().events().len(), start_events);
     assert_eq!(result.err(), Some(Ok(Error::EmergencyTooEarly)));
 }
 
@@ -1130,9 +1130,9 @@ fn emergency_withdraw_fails_in_active_state() {
     client.init(&factory, &admin, &creator, &config);
     client.deposit_prize();
 
-    let start_events = env.events().all().len();
+    let start_events = env.events().all().events().len();
     let result = client.try_emergency_withdraw(&creator);
-    assert_eq!(env.events().all().len(), start_events);
+    assert_eq!(env.events().all().events().len(), start_events);
     assert_eq!(result.err(), Some(Ok(Error::InvalidStatus)));
 }
 
@@ -1224,9 +1224,9 @@ fn setup_external_drawing_raffle(
     client.deposit_prize();
     client.cancel(&creator, &CancelReason::Other);
 
-    let start_events = env.events().all().len();
+    let start_events = env.events().all().events().len();
     let result = client.try_emergency_withdraw(&creator);
-    assert_eq!(env.events().all().len(), start_events);
+    assert_eq!(env.events().all().events().len(), start_events);
     assert_eq!(result.err(), Some(Ok(Error::InvalidStatus)));
 }
 
@@ -1294,9 +1294,9 @@ fn emergency_withdraw_fails_if_prize_not_deposited() {
     let balance_after = soroban_sdk::token::Client::new(&env, &payment_token).balance(&buyer);
     assert_eq!(balance_after, balance_before + MIN_TICKET_PRICE);
 
-    let start_events = env.events().all().len();
+    let start_events = env.events().all().events().len();
     let second_refund = client.try_refund_ticket(&1);
-    assert_eq!(env.events().all().len(), start_events);
+    assert_eq!(env.events().all().events().len(), start_events);
     assert_eq!(second_refund.err(), Some(Ok(Error::PrizeAlreadyClaimed)));
 }
 
@@ -1342,9 +1342,9 @@ fn test_refund_guard_released_after_success() {
 
     client.init(&factory, &admin, &creator, &config);
 
-    let start_events = env.events().all().len();
+    let start_events = env.events().all().events().len();
     let result = client.try_emergency_withdraw(&creator);
-    assert_eq!(env.events().all().len(), start_events);
+    assert_eq!(env.events().all().events().len(), start_events);
     assert_eq!(result.err(), Some(Ok(Error::PrizeNotDeposited)));
 }
 
@@ -2342,7 +2342,7 @@ fn test_init_claim_lockup_seconds_mid_range_succeeds() {
 
     // 3. Creator deposits the prize → status becomes Active.
     let creator_balance_before_deposit = token_ro.balance(&creator);
-    let start_events = env.events().all().len();
+    let start_events = env.events().all().events().len();
     client.deposit_prize();
     assert_event(
         &env,
@@ -2355,7 +2355,7 @@ fn test_init_claim_lockup_seconds_mid_range_succeeds() {
             timestamp: env.ledger().timestamp(),
         },
     );
-    assert_eq!(env.events().all().len(), start_events + 1);
+    assert_eq!(env.events().all().events().len(), start_events + 1);
     assert_eq!(client.get_raffle().status, RaffleStatus::Active);
     assert_metadata_hash(&client, &expected_metadata_hash);
     assert_eq!(
@@ -2368,7 +2368,7 @@ fn test_init_claim_lockup_seconds_mid_range_succeeds() {
     //    protocol fee (1%) is forwarded to the treasury on each purchase.
     let per_ticket_fee = ticket_price * fee_bp / 10_000;
     for (idx, buyer) in [&buyer_a, &buyer_b, &buyer_c].iter().enumerate() {
-        let start_events = env.events().all().len();
+        let start_events = env.events().all().events().len();
         let sold = client.buy_tickets(buyer, &1);
         
         assert_event(
@@ -2388,9 +2388,9 @@ fn test_init_claim_lockup_seconds_mid_range_succeeds() {
         );
         // We know buy_tickets also emits a StatusChanged event when it sells out (the last iteration).
         if idx < 2 {
-            assert_eq!(env.events().all().len(), start_events + 1);
+            assert_eq!(env.events().all().events().len(), start_events + 1);
         } else {
-            assert_eq!(env.events().all().len(), start_events + 2); // StatusChanged emitted on the last one!
+            assert_eq!(env.events().all().events().len(), start_events + 2); // StatusChanged emitted on the last one!
         }
         
         assert_eq!(sold, idx as u32 + 1);
@@ -2403,7 +2403,7 @@ fn test_init_claim_lockup_seconds_mid_range_succeeds() {
     assert_eq!(token_ro.balance(&treasury), per_ticket_fee * 3);
 
     // 5. Finalize → internal randomness picks the winner synchronously.
-    let start_events = env.events().all().len();
+    let start_events = env.events().all().events().len();
     client.finalize_raffle();
     
     assert_event(
@@ -2448,7 +2448,7 @@ fn unique_winners_limits_one_tier_per_address() {
     token::StellarAssetClient::new(&env, &token_addr).mint(&buyer_b, &10_000_000);
 
     let winner_balance_before = token_ro.balance(&winner);
-    let start_events = env.events().all().len();
+    let start_events = env.events().all().events().len();
     let claimed = client.claim_prize(&winner, &0u32);
     
     assert_event(
@@ -2465,7 +2465,7 @@ fn unique_winners_limits_one_tier_per_address() {
             claimed_at: env.ledger().timestamp(),
         },
     );
-    assert_eq!(env.events().all().len(), start_events + 1);
+    assert_eq!(env.events().all().events().len(), start_events + 1);
     assert_metadata_hash(&client, &expected_metadata_hash);
 
     let config = RaffleConfig {

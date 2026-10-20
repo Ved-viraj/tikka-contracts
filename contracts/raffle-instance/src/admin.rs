@@ -1,24 +1,27 @@
 use soroban_sdk::{token, Address, BytesN, Env};
 
-use raffle_shared::CancelReason;
 use raffle_shared::constants::TIMELOCK_DELAY_SECONDS;
+use raffle_shared::CancelReason;
 
 use crate::events::{
-    AdminChanged, CancelScheduled, ContractPaused, ContractUnpaused, DustSwept,
-    EmergencyWithdrawn, FeesWithdrawn, MetadataHashUpdated, OracleAddressUpdated,
-    ProtocolFeeUpdated, RaffleCancelled, StorageWiped, SwapDeadlineUpdated, TicketSalesPaused,
-    TicketSalesResumed, TokensRescued,
+    AdminChanged, CancelScheduled, ContractPaused, ContractUnpaused, DustSwept, EmergencyWithdrawn,
+    FeesWithdrawn, MetadataHashUpdated, OracleAddressUpdated, ProtocolFeeUpdated, RaffleCancelled,
+    StorageWiped, SwapDeadlineUpdated, TicketSalesPaused, TicketSalesResumed, TokensRescued,
 };
 use crate::{
-    calculate_tier_prize, read_raffle, require_admin, write_raffle, DataKey, Error, RaffleStatus,
-    transition_status, EMERGENCY_WITHDRAW_DELAY_SECONDS, MAX_PROTOCOL_FEE_BP,
+    calculate_tier_prize, read_raffle, require_admin, transition_status, write_raffle, DataKey,
+    Error, RaffleStatus, EMERGENCY_WITHDRAW_DELAY_SECONDS, MAX_PROTOCOL_FEE_BP,
     MAX_SWAP_DEADLINE_SECONDS,
 };
 
 fn outstanding_ticket_refunds(env: &Env, raffle: &crate::Raffle) -> Result<i128, Error> {
     let mut outstanding = 0i128;
     for ticket_id in 1..=raffle.tickets_sold {
-        if !env.storage().persistent().has(&DataKey::TicketRefunded(ticket_id)) {
+        if !env
+            .storage()
+            .persistent()
+            .has(&DataKey::TicketRefunded(ticket_id))
+        {
             outstanding = outstanding
                 .checked_add(raffle.ticket_price)
                 .ok_or(Error::ArithmeticOverflow)?;
@@ -76,6 +79,15 @@ fn token_entitlement(env: &Env, raffle: &crate::Raffle, token: &Address) -> Resu
     Ok(entitlement)
 }
 
+pub(crate) fn set_admin(env: Env, new_admin: Address) -> Result<(), Error> {
+    let _current = require_admin(&env)?;
+    if !new_admin.exists() || new_admin == env.current_contract_address() {
+        return Err(Error::InvalidAdminAddress);
+    }
+    env.storage().instance().set(&DataKey::Admin, &new_admin);
+    Ok(())
+}
+
 pub(crate) fn transfer_admin(env: Env, new_admin: Address) -> Result<(), Error> {
     let current_admin = require_admin(&env)?;
     if !new_admin.exists() || new_admin == env.current_contract_address() {
@@ -122,7 +134,11 @@ pub(crate) fn accept_admin(env: Env) -> Result<(), Error> {
     Ok(())
 }
 
-pub(crate) fn update_oracle_address(env: Env, new_oracle: Address, new_public_key: Option<BytesN<32>>) -> Result<(), Error> {
+pub(crate) fn update_oracle_address(
+    env: Env,
+    new_oracle: Address,
+    new_public_key: Option<BytesN<32>>,
+) -> Result<(), Error> {
     let admin = require_admin(&env)?;
     let mut raffle = read_raffle(&env)?;
     if raffle.randomness_source != raffle_shared::RandomnessSource::External {
@@ -211,7 +227,8 @@ pub(crate) fn cancel_raffle(env: Env, reason: CancelReason) -> Result<(), Error>
             admin.require_auth();
             // For admin cancels, schedule the cancellation with a timelock
             let now = env.ledger().timestamp();
-            let cancel_at = now.checked_add(TIMELOCK_DELAY_SECONDS)
+            let cancel_at = now
+                .checked_add(TIMELOCK_DELAY_SECONDS)
                 .ok_or(Error::ArithmeticOverflow)?;
             env.storage()
                 .instance()
@@ -253,20 +270,20 @@ pub(crate) fn cancel_raffle(env: Env, reason: CancelReason) -> Result<(), Error>
 
 pub(crate) fn execute_admin_cancel(env: Env) -> Result<(), Error> {
     let mut raffle = read_raffle(&env)?;
-    
+
     // Check if there's a pending admin cancel
     let cancel_at: u64 = env
         .storage()
         .instance()
         .get(&DataKey::PendingAdminCancel)
         .ok_or(Error::CancelNotScheduled)?;
-    
+
     // Check if the timelock has elapsed
     let now = env.ledger().timestamp();
     if now < cancel_at {
         return Err(Error::CancelTimelockActive);
     }
-    
+
     // Check raffle status
     if raffle.status == RaffleStatus::Finalized
         || raffle.status == RaffleStatus::Cancelled
@@ -274,18 +291,15 @@ pub(crate) fn execute_admin_cancel(env: Env) -> Result<(), Error> {
     {
         return Err(Error::InvalidStatus);
     }
-    
+
     // Execute the cancel
-    transition_status(
-        &env,
-        &mut raffle,
-        RaffleStatus::Cancelled,
-        now,
-    )?;
-    
+    transition_status(&env, &mut raffle, RaffleStatus::Cancelled, now)?;
+
     // Clear the pending cancel
-    env.storage().instance().remove(&DataKey::PendingAdminCancel);
-    
+    env.storage()
+        .instance()
+        .remove(&DataKey::PendingAdminCancel);
+
     RaffleCancelled {
         creator: raffle.creator,
         reason: CancelReason::AdminCancelled,
@@ -294,7 +308,7 @@ pub(crate) fn execute_admin_cancel(env: Env) -> Result<(), Error> {
         timestamp: now,
     }
     .publish(&env);
-    
+
     Ok(())
 }
 
@@ -420,6 +434,7 @@ pub(crate) fn withdraw_fees(env: Env, recipient: Address, amount: i128) -> Resul
     }
     let tc = token::Client::new(&env, &raffle.payment_token);
     tc.try_transfer(&env.current_contract_address(), &recipient, &amount)
+        .map_err(|_| Error::TokenTransferFailed)?
         .map_err(|_| Error::TokenTransferFailed)?;
     let remaining = acc.checked_sub(amount).ok_or(Error::ArithmeticOverflow)?;
     env.storage()
@@ -456,8 +471,7 @@ pub(crate) fn rescue_tokens(
         return Err(Error::InvalidParameters);
     }
     if let Ok(raffle) = read_raffle(&env) {
-        let balance = token::Client::new(&env, &token)
-            .balance(&env.current_contract_address());
+        let balance = token::Client::new(&env, &token).balance(&env.current_contract_address());
         let entitlement = token_entitlement(&env, &raffle, &token)?;
         if entitlement > balance || amount > balance - entitlement {
             return Err(Error::InvalidStateTransition);
@@ -584,13 +598,12 @@ pub(crate) fn wipe_storage(env: Env) -> Result<(), Error> {
         }
     }
 
-    let payment_balance = token::Client::new(&env, &raffle.payment_token)
-        .balance(&env.current_contract_address());
+    let payment_balance =
+        token::Client::new(&env, &raffle.payment_token).balance(&env.current_contract_address());
     let prize_balance = if raffle.prize_token == raffle.payment_token {
         payment_balance
     } else {
-        token::Client::new(&env, &raffle.prize_token)
-            .balance(&env.current_contract_address())
+        token::Client::new(&env, &raffle.prize_token).balance(&env.current_contract_address())
     };
     if payment_balance != 0 || prize_balance != 0 {
         return Err(Error::InvalidStateTransition);
@@ -632,7 +645,9 @@ pub(crate) fn wipe_storage(env: Env) -> Result<(), Error> {
         .remove(&DataKey::RandomnessRequestId);
     env.storage().instance().remove(&DataKey::DrawingLock);
     env.storage().instance().remove(&DataKey::FinishTime);
-    env.storage().instance().remove(&DataKey::PendingAdminCancel);
+    env.storage()
+        .instance()
+        .remove(&DataKey::PendingAdminCancel);
     env.storage().instance().remove(&DataKey::PendingAdmin);
 
     let submitted_oracles: soroban_sdk::Vec<Address> = env
@@ -699,12 +714,11 @@ pub(crate) fn emergency_withdraw(env: Env, caller: Address) -> Result<(), Error>
     }
 
     let prize_token = raffle.prize_token.clone();
-    let prize_balance = token::Client::new(&env, &prize_token)
-        .balance(&env.current_contract_address());
+    let prize_balance =
+        token::Client::new(&env, &prize_token).balance(&env.current_contract_address());
     let prize_entitlement = token_entitlement(&env, &raffle, &prize_token)?;
     if prize_balance < raffle.prize_amount
-        || prize_balance - raffle.prize_amount
-            < prize_entitlement - raffle.prize_amount
+        || prize_balance - raffle.prize_amount < prize_entitlement - raffle.prize_amount
     {
         return Err(Error::InvalidStateTransition);
     }

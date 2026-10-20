@@ -45,7 +45,6 @@ Source of truth: `DataKey` enum.
 | `TotalVolumePerAsset(Address)` | Persistent | Updated on volume record | Analytics | Soft | Cumulative volume |
 | `Checkpoint(u32)` | Persistent | Every `CHECKPOINT_INTERVAL` (1000) raffles | Audit | Soft historically | Periodic snapshot |
 | `LatestCheckpointIndex` | Persistent | With checkpoint write | Audit | Prefer keep | Points at latest checkpoint |
-| `RaffleInstancesCount` | Persistent | Test path only | Test | N/A | Address generation under `cfg(test)` |
 
 ### Factory write patterns
 

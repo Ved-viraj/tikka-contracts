@@ -123,6 +123,11 @@ pub(crate) fn init(
         .swap_deadline_seconds
         .unwrap_or(DEFAULT_SWAP_DEADLINE_SECONDS);
 
+    let prize_token = config
+        .prize_token
+        .clone()
+        .unwrap_or_else(|| config.payment_token.clone());
+
     let raffle = Raffle {
         creator: creator.clone(),
         description: config.description.clone(),
@@ -179,7 +184,8 @@ pub(crate) fn init(
         metadata_hash: config.metadata_hash,
         unique_winners: config.unique_winners,
         claim_expiry_seconds: claim_expiry,
-    }.publish(&env);
+    }
+    .publish(&env);
 
     Ok(())
 }
@@ -235,14 +241,24 @@ pub(crate) fn deposit_prize(env: Env) -> Result<(), Error> {
 
     let token_client = token::Client::new(&env, &raffle.prize_token);
     let _ = token_client
-        .try_transfer(&raffle.creator, env.current_contract_address(), &raffle.prize_amount)
+        .try_transfer(
+            &raffle.creator,
+            env.current_contract_address(),
+            &raffle.prize_amount,
+        )
         .map_err(|_| Error::TokenTransferFailed)?;
 
     raffle.prize_deposited = true;
     let ts = env.ledger().timestamp();
     transition_status(&env, &mut raffle, RaffleStatus::Active, ts)?;
 
-    PrizeDeposited { creator: raffle.creator.clone(), amount: raffle.prize_amount, token: raffle.prize_token.clone(), timestamp: ts }.publish(&env);
+    PrizeDeposited {
+        creator: raffle.creator.clone(),
+        amount: raffle.prize_amount,
+        token: raffle.prize_token.clone(),
+        timestamp: ts,
+    }
+    .publish(&env);
 
     Ok(())
 }

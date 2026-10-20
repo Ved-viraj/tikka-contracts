@@ -15,12 +15,11 @@ fn non_whitelisted_creator_is_rate_limited() {
 
     client.create_raffle(&creator, &rate_limit_config(&env, &token, "r1"));
 
-    let start_events = env.events().all().len();
     assert_eq!(
         client.try_create_raffle(&creator, &rate_limit_config(&env, &token, "r2")),
         Err(Ok(ContractError::RateLimitExceeded))
     );
-    assert_eq!(env.events().all().len(), start_events + 1);
+    assert!(env.events().all().events().is_empty());
 
     env.ledger().set_timestamp(1_000 + delay);
 
@@ -113,12 +112,11 @@ fn set_creation_delay_affects_rate_limiter() {
     client.create_raffle(&creator, &rate_limit_config(&env, &token, "d1"));
 
     env.ledger().set_timestamp(1_000 + 59);
-    let start_events = env.events().all().len();
     assert_eq!(
         client.try_create_raffle(&creator, &rate_limit_config(&env, &token, "d2")),
         Err(Ok(ContractError::RateLimitExceeded))
     );
-    assert_eq!(env.events().all().len(), start_events + 1);
+    assert!(env.events().all().events().is_empty());
 
     env.ledger().set_timestamp(1_000 + 60);
     client.create_raffle(&creator, &rate_limit_config(&env, &token, "d3"));
@@ -220,8 +218,31 @@ fn test_only_admin_can_set_creation_paused() {
             sub_invokes: &[],
         },
     }]);
-    assert_eq!(
-        client.try_set_creation_paused(&true),
-        Err(Ok(ContractError::NotAuthorized))
-    );
+    // `require_admin` calls `admin.require_auth()`, so a stranger signature is
+    // rejected by the host before the contract can return `NotAuthorized`.
+    assert!(client.try_set_creation_paused(&true).is_err());
+    assert!(!client.is_creation_paused());
+}
+
+#[test]
+fn create_raffle_address_matches_predict_raffle_address() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin, _treasury) = setup_factory(&env);
+    let creator = Address::generate(&env);
+    let token = make_token(&env);
+    // Same description twice: the salt is (creator, NextRaffleId), not the text.
+    let config = rate_limit_config(&env, &token, "same-description");
+
+    let nonce = client.get_next_raffle_id() as u64;
+    let predicted = client.predict_raffle_address(&creator, &nonce);
+    let deployed = client.create_raffle(&creator, &config);
+    assert_eq!(deployed, predicted);
+
+    let nonce_after = client.get_next_raffle_id() as u64;
+    assert_eq!(nonce_after, nonce + 1);
+    let predicted_next = client.predict_raffle_address(&creator, &nonce_after);
+    let deployed_next = client.create_raffle(&creator, &config);
+    assert_eq!(deployed_next, predicted_next);
+    assert_ne!(deployed, deployed_next);
 }

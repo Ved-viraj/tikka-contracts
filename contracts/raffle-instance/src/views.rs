@@ -60,10 +60,16 @@ pub(crate) fn get_raffle(env: Env) -> Result<crate::Raffle, Error> {
 /// See also: [`docs/RANDOMNESS.md`](../../../docs/RANDOMNESS.md) — audit
 /// and replay verification.
 pub(crate) fn get_fairness_data(env: Env) -> Result<FairnessData, Error> {
-    let meta: FairnessMetadata = env.storage().persistent().get(&DataKey::RandomnessSeed).ok_or(Error::InvalidStatus)?;
+    let meta: FairnessMetadata = env
+        .storage()
+        .persistent()
+        .get(&DataKey::RandomnessSeed)
+        .ok_or(Error::InvalidStatus)?;
     let raffle = read_raffle(&env)?;
     let mut ticket_ids = Vec::new(&env);
-    for i in 1..=raffle.tickets_sold { ticket_ids.push_back(i); }
+    for i in 1..=raffle.tickets_sold {
+        ticket_ids.push_back(i);
+    }
     Ok(FairnessData {
         seed: meta.seed,
         randomness_source: meta.randomness_source,
@@ -98,7 +104,6 @@ pub(crate) fn get_fairness_data(env: Env) -> Result<FairnessData, Error> {
 /// # Errors
 ///
 /// - [`Error::NotInitialized`] — the raffle has not been initialised.
-/// - [`Error::ArithmeticOverflow`] — the gross revenue calculation overflows.
 pub(crate) fn get_stats(env: Env) -> Result<RaffleStats, Error> {
     let raffle = read_raffle(&env)?;
 
@@ -159,7 +164,10 @@ pub(crate) fn get_stats(env: Env) -> Result<RaffleStats, Error> {
 /// [`Error::ContractPaused`].  The flag is set/cleared by the factory relay
 /// via the `pause` / `unpause` admin entry points.
 pub(crate) fn is_paused(env: Env) -> bool {
-    env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+    env.storage()
+        .instance()
+        .get(&DataKey::Paused)
+        .unwrap_or(false)
 }
 
 /// Return `true` if ticket sales are paused within an otherwise-active raffle.
@@ -171,7 +179,9 @@ pub(crate) fn is_paused(env: Env) -> bool {
 ///
 /// Returns `false` if the raffle has not been initialised.
 pub(crate) fn is_ticket_sales_paused(env: Env) -> bool {
-    read_raffle(&env).map(|r| r.ticket_sales_paused).unwrap_or(false)
+    read_raffle(&env)
+        .map(|r| r.ticket_sales_paused)
+        .unwrap_or(false)
 }
 
 /// Return the number of tickets `owner` may still receive.
@@ -181,10 +191,7 @@ pub(crate) fn is_ticket_sales_paused(env: Env) -> bool {
 /// `allow_multiple: false` still limits an address to one ticket. The result
 /// never exceeds the raffle-wide remaining capacity.
 #[allow(dead_code)]
-pub(crate) fn get_remaining_ticket_allowance(
-    env: Env,
-    owner: Address,
-) -> Result<u32, Error> {
+pub(crate) fn get_remaining_ticket_allowance(env: Env, owner: Address) -> Result<u32, Error> {
     let raffle = read_raffle(&env)?;
     let current_count: u32 = env
         .storage()
@@ -214,7 +221,10 @@ pub(crate) fn get_remaining_ticket_allowance(
 /// Returns `0` before any tickets have been sold or after fees have been
 /// fully withdrawn.
 pub(crate) fn get_accumulated_fees(env: Env) -> i128 {
-    env.storage().instance().get(&DataKey::AccumulatedFees).unwrap_or(0)
+    env.storage()
+        .instance()
+        .get(&DataKey::AccumulatedFees)
+        .unwrap_or(0)
 }
 
 /// Quote the exact cost of buying `quantity` tickets including early-bird

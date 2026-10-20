@@ -65,7 +65,7 @@ fn test_oracle_fallback_with_ledger_delays() {
         prize_token: None,
         nft_contract: None,
 
-            bundles: soroban_sdk::Vec::new(&env),
+        bundles: soroban_sdk::Vec::new(&env),
     };
 
     client.init(&factory, &admin, &creator, &config);
@@ -74,7 +74,6 @@ fn test_oracle_fallback_with_ledger_delays() {
     let raffle = client.get_raffle();
     assert_eq!(raffle.claim_lockup_seconds, DEFAULT_CLAIM_LOCKUP_SECONDS);
     assert_eq!(raffle.swap_deadline_seconds, DEFAULT_SWAP_DEADLINE_SECONDS);
-
 
     // 3. Deposit prize and buy ticket
     client.deposit_prize();
@@ -86,7 +85,7 @@ fn test_oracle_fallback_with_ledger_delays() {
 
     // 6. Attempt fallback too early
     let result = client.try_trigger_randomness_fallback(&creator, &false);
-    assert_eq!(env.events().all().len(), 0);
+    assert_eq!(env.events().all().events().len(), 0);
     assert_eq!(result.err(), Some(Ok(Error::FallbackTooEarly)));
 
     // 7. Simulate ledger delays
@@ -164,8 +163,8 @@ fn commit_reveal_entropy_is_mixed_from_all_tickets() {
             prize_token: None,
             nft_contract: None,
 
-                bundles: soroban_sdk::Vec::new(&env),
-    };
+            bundles: soroban_sdk::Vec::new(&env),
+        };
 
         client.init(&factory, &admin, &creator, &config);
         client.deposit_prize();
@@ -250,7 +249,7 @@ fn commit_reveal_preserves_entropy_after_ticket_transfer() {
         swap_router: None,
         tikka_token: None,
         unique_winners: false,
-            metadata_hash: BytesN::from_array(&env, &[46; 32]),
+        metadata_hash: BytesN::from_array(&env, &[46; 32]),
         claim_lockup_seconds: None,
         swap_deadline_seconds: None,
         max_tickets_per_address: 0,
@@ -261,7 +260,7 @@ fn commit_reveal_preserves_entropy_after_ticket_transfer() {
         prize_token: None,
         nft_contract: None,
 
-            bundles: soroban_sdk::Vec::new(&env),
+        bundles: soroban_sdk::Vec::new(&env),
     };
 
     client.init(&factory, &admin, &creator, &config);
@@ -346,7 +345,7 @@ fn commit_reveal_with_zero_commits_falls_back_to_prng() {
         swap_router: None,
         tikka_token: None,
         unique_winners: false,
-            metadata_hash: BytesN::from_array(&env, &[47; 32]),
+        metadata_hash: BytesN::from_array(&env, &[47; 32]),
         claim_lockup_seconds: None,
         swap_deadline_seconds: None,
         max_tickets_per_address: 0,
@@ -357,7 +356,7 @@ fn commit_reveal_with_zero_commits_falls_back_to_prng() {
         prize_token: None,
         nft_contract: None,
 
-            bundles: soroban_sdk::Vec::new(&env),
+        bundles: soroban_sdk::Vec::new(&env),
     };
 
     client.init(&factory, &admin, &creator, &config);
@@ -426,7 +425,7 @@ fn drawing_lock_cleared_after_internal_finalize() {
         swap_router: None,
         tikka_token: None,
         unique_winners: false,
-            metadata_hash: BytesN::from_array(&env, &[48; 32]),
+        metadata_hash: BytesN::from_array(&env, &[48; 32]),
         claim_lockup_seconds: None,
         swap_deadline_seconds: None,
         bundles: soroban_sdk::vec![&env],
@@ -437,7 +436,6 @@ fn drawing_lock_cleared_after_internal_finalize() {
         category: None,
         prize_token: None,
         nft_contract: None,
-
     };
 
     client.init(&factory, &admin, &creator, &config);
@@ -492,7 +490,8 @@ fn drawing_lock_cleared_after_oracle_seed_delivered() {
     assert_eq!(client.get_raffle().status, RaffleStatus::Drawing);
 
     // Advance past the minimum delay before the oracle may deliver entropy.
-    env.ledger().set_sequence_number(env.ledger().sequence() + 20);
+    env.ledger()
+        .set_sequence_number(env.ledger().sequence() + 20);
 
     let request_id: u64 = env.as_contract(&contract_id, || {
         env.storage()
@@ -594,7 +593,7 @@ fn drawing_lock_cleared_after_fallback_refund() {
         swap_router: None,
         tikka_token: None,
         unique_winners: false,
-            metadata_hash: BytesN::from_array(&env, &[50; 32]),
+        metadata_hash: BytesN::from_array(&env, &[50; 32]),
         claim_lockup_seconds: Some(MAX_CLAIM_LOCKUP_SECONDS),
         swap_deadline_seconds: None,
         early_bird_ticket_percentage: 0,
@@ -605,7 +604,7 @@ fn drawing_lock_cleared_after_fallback_refund() {
         prize_token: None,
         nft_contract: None,
 
-            bundles: soroban_sdk::Vec::new(&env),
+        bundles: soroban_sdk::Vec::new(&env),
     };
 
     client.init(&creator_factory_addr(&env), &admin, &creator, &config);
@@ -652,7 +651,7 @@ fn drawing_lock_cleared_after_cancel_in_drawing_state() {
         swap_router: None,
         tikka_token: None,
         unique_winners: false,
-            metadata_hash: BytesN::from_array(&env, &[52; 32]),
+        metadata_hash: BytesN::from_array(&env, &[52; 32]),
         claim_lockup_seconds: None,
         swap_deadline_seconds: None,
         max_tickets_per_address: 0,
@@ -663,7 +662,7 @@ fn drawing_lock_cleared_after_cancel_in_drawing_state() {
         prize_token: None,
         nft_contract: None,
 
-            bundles: soroban_sdk::Vec::new(&env),
+        bundles: soroban_sdk::Vec::new(&env),
     };
 
     client.init(&factory, &admin, &creator, &config);
@@ -727,7 +726,7 @@ fn unique_winners_limits_one_tier_per_address() {
         prize_token: None,
         nft_contract: None,
 
-            bundles: soroban_sdk::Vec::new(&env),
+        bundles: soroban_sdk::Vec::new(&env),
     };
 
     client.init(&factory, &admin, &creator, &config);
@@ -824,8 +823,7 @@ fn quorum_rejects_unregistered_oracle() {
     let oracle_a = Address::generate(&env);
     let oracle_b = Address::generate(&env);
     let stranger = Address::generate(&env);
-    let (client, _, _, request_id) =
-        setup_quorum_drawing_raffle(&env, 2, &[oracle_a, oracle_b]);
+    let (client, _, _, request_id) = setup_quorum_drawing_raffle(&env, 2, &[oracle_a, oracle_b]);
 
     assert_eq!(
         client.try_provide_quorum_randomness(&stranger, &999, &request_id),
@@ -928,7 +926,7 @@ fn quorum_rejects_submission_before_drawing_lock() {
         prize_token: None,
         nft_contract: None,
 
-            bundles: soroban_sdk::Vec::new(&env),
+        bundles: soroban_sdk::Vec::new(&env),
     };
 
     client.init(&factory, &admin, &creator, &config);
@@ -949,8 +947,11 @@ fn quorum_aggregation_is_order_independent() {
     let oracle_b = Address::generate(&env);
     let oracle_c = Address::generate(&env);
 
-    let (client_ab, _, _, req_ab) =
-        setup_quorum_drawing_raffle(&env, 3, &[oracle_a.clone(), oracle_b.clone(), oracle_c.clone()]);
+    let (client_ab, _, _, req_ab) = setup_quorum_drawing_raffle(
+        &env,
+        3,
+        &[oracle_a.clone(), oracle_b.clone(), oracle_c.clone()],
+    );
     client_ab.provide_quorum_commit(
         &oracle_a,
         &quorum_commit(&env, &oracle_a, 10, req_ab),
@@ -971,8 +972,11 @@ fn quorum_aggregation_is_order_independent() {
     client_ab.provide_quorum_randomness(&oracle_b, &20, &req_ab);
     let seed_abc = client_ab.get_fairness_data().seed;
 
-    let (client_ba, _, _, req_ba) =
-        setup_quorum_drawing_raffle(&env, 3, &[oracle_a.clone(), oracle_b.clone(), oracle_c.clone()]);
+    let (client_ba, _, _, req_ba) = setup_quorum_drawing_raffle(
+        &env,
+        3,
+        &[oracle_a.clone(), oracle_b.clone(), oracle_c.clone()],
+    );
     client_ba.provide_quorum_commit(
         &oracle_a,
         &quorum_commit(&env, &oracle_a, 10, req_ba),
@@ -1022,10 +1026,26 @@ fn quorum_storage_cleared_allows_redraw() {
 
     // Simulate a re-draw by re-arming drawing state (same oracles, new request).
     env.as_contract(&contract_id, || {
-        let has_submitted = env.storage().persistent().has(&DataKey::QuorumSubmittedOracles);
-        assert!(!has_submitted, "QuorumSubmittedOracles should be cleared after finalization");
-        assert!(!env.storage().persistent().has(&DataKey::QuorumSeed(oracle_a.clone())), "QuorumSeed for oracle_a should be cleared");
-        assert!(!env.storage().persistent().has(&DataKey::QuorumSeed(oracle_b.clone())), "QuorumSeed for oracle_b should be cleared");
+        let has_submitted = env
+            .storage()
+            .persistent()
+            .has(&DataKey::QuorumSubmittedOracles);
+        assert!(
+            !has_submitted,
+            "QuorumSubmittedOracles should be cleared after finalization"
+        );
+        assert!(
+            !env.storage()
+                .persistent()
+                .has(&DataKey::QuorumSeed(oracle_a.clone())),
+            "QuorumSeed for oracle_a should be cleared"
+        );
+        assert!(
+            !env.storage()
+                .persistent()
+                .has(&DataKey::QuorumSeed(oracle_b.clone())),
+            "QuorumSeed for oracle_b should be cleared"
+        );
 
         let mut raffle = crate::read_raffle(&env).unwrap();
         raffle.status = RaffleStatus::Drawing;
@@ -1100,7 +1120,7 @@ fn test_unique_winners_single_owner_terminates() {
         prize_token: None,
         nft_contract: None,
 
-            bundles: soroban_sdk::Vec::new(&env),
+        bundles: soroban_sdk::Vec::new(&env),
     };
 
     client.init(&factory, &admin, &creator, &config);
@@ -1170,7 +1190,7 @@ fn test_unique_winners_n_distinct_owners_n_tiers() {
         prize_token: None,
         nft_contract: None,
 
-            bundles: soroban_sdk::Vec::new(&env),
+        bundles: soroban_sdk::Vec::new(&env),
     };
 
     client.init(&factory, &admin, &creator, &config);
@@ -1265,7 +1285,8 @@ fn provide_randomness_rejects_mismatched_public_key() {
     assert_eq!(client.get_raffle().status, RaffleStatus::Drawing);
 
     // Advance past the minimum delay.
-    env.ledger().set_sequence_number(env.ledger().sequence() + 20);
+    env.ledger()
+        .set_sequence_number(env.ledger().sequence() + 20);
 
     let request_id: u64 = env.as_contract(&contract_id, || {
         env.storage()

@@ -11,30 +11,46 @@
 
 use crate::*;
 use raffle_shared::{
-    constants::MAX_INTERNAL_RANDOMNESS_PRIZE_AMOUNT, DEFAULT_PAGE_LIMIT,
-    MAX_PAGE_LIMIT, PaginationParams, RandomnessSource, RaffleConfigBuilder,
+    constants::MAX_INTERNAL_RANDOMNESS_PRIZE_AMOUNT, PaginationParams, RaffleConfigBuilder,
+    RandomnessSource, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT,
 };
 use soroban_sdk::{
     testutils::{Address as _, Events, Ledger, MockAuth, MockAuthInvoke},
     Address, BytesN, Env, FromVal, IntoVal, String, Symbol, Val, Vec as SdkVec,
 };
 
-pub fn assert_event(
-    env: &Env,
-    expected_contract: &Address,
-    expected_topic: &str,
-) {
-    let events = env.events().all();
-    let last = events.last().unwrap();
-    assert_eq!(&last.0, expected_contract);
-    assert_eq!(Symbol::from_val(env, &last.1.get(0).unwrap()), Symbol::new(env, "tikka"));
-    assert_eq!(Symbol::from_val(env, &last.1.get(1).unwrap()), Symbol::new(env, expected_topic));
+pub fn assert_event(env: &Env, expected_contract: &Address, expected_topic: &str) {
+    use soroban_sdk::xdr::{ContractEventBody, ScVal};
+    let events = env.events().all().filter_by_contract(expected_contract);
+    let last = events.events().last().expect("expected an event");
+    let ContractEventBody::V0(body) = &last.body;
+    let topic = |val: &ScVal| match val {
+        ScVal::Symbol(symbol) => symbol.0.to_utf8_string().expect("symbol utf-8"),
+        other => panic!("event topic was not a symbol: {other:?}"),
+    };
+    assert_eq!(topic(&body.topics[0]), expected_topic);
+}
+
+/// Install the raffle-instance executable and return the Wasm hash `deploy_v2`
+/// loads. SDK 28's test host does this with [`Env::upload`], which registers the
+/// compiled instance the same way [`soroban_sdk::deploy::Deployer::upload_contract_wasm`]
+/// registers a Wasm blob. Unit tests have no prebuilt `.wasm` file (`cargo check`
+/// runs before `make build`), so the host upload is what makes `deploy_v2`
+/// dispatch to `RaffleInstance`.
+pub fn upload_instance_wasm(env: &Env) -> BytesN<32> {
+    env.upload(raffle_instance::RaffleInstance)
+}
+
+/// A deployed contract address. `Address::exists` is false for
+/// `Address::generate`, which only builds an undeployed contract id.
+pub fn existing_address(env: &Env) -> Address {
+    env.register(RaffleFactory, ())
 }
 
 pub fn setup_factory(env: &Env) -> (RaffleFactoryClient<'_>, Address, Address) {
-    let admin = Address::generate(env);
-    let treasury = Address::generate(env);
-    let wasm_hash = BytesN::from_array(env, &[0u8; 32]);
+    let admin = existing_address(env);
+    let treasury = existing_address(env);
+    let wasm_hash = upload_instance_wasm(env);
 
     let contract_id = env.register(RaffleFactory, ());
     let client = RaffleFactoryClient::new(env, &contract_id);
@@ -107,6 +123,23 @@ pub fn create_raffles_via_factory(
                 .set(&DataKey::RaffleById(stable_id), &raffle_address);
             env.storage()
                 .persistent()
+                .set(&DataKey::RaffleCreator(stable_id), creator);
+            if let Some(ref category) = config.category {
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::RaffleCategory(stable_id), category);
+            }
+            let mut creator_raffles: SdkVec<Address> = env
+                .storage()
+                .persistent()
+                .get(&DataKey::CreatorRaffles(creator.clone()))
+                .unwrap_or_else(|| SdkVec::new(env));
+            creator_raffles.push_back(raffle_address.clone());
+            env.storage()
+                .persistent()
+                .set(&DataKey::CreatorRaffles(creator.clone()), &creator_raffles);
+            env.storage()
+                .persistent()
                 .set(&DataKey::NextRaffleId, &(stable_id.saturating_add(1)));
             let live_count: u32 = env
                 .storage()
@@ -122,6 +155,22 @@ pub fn create_raffles_via_factory(
         addrs.push_back(raffle_address);
     }
     addrs
+}
+
+/// `wipe_storage` only accepts a terminal raffle. Index-pruning tests create
+/// live raffles, so mark them failed (no tickets, no prize) before cleanup.
+pub fn mark_raffle_failed(env: &Env, raffle: &Address) {
+    env.as_contract(raffle, || {
+        let mut state: raffle_instance::Raffle = env
+            .storage()
+            .instance()
+            .get(&raffle_instance::DataKey::Raffle)
+            .unwrap();
+        state.status = raffle_shared::RaffleStatus::Failed;
+        env.storage()
+            .instance()
+            .set(&raffle_instance::DataKey::Raffle, &state);
+    });
 }
 
 pub const ZERO_CONTRACT: &str = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4";

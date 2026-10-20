@@ -202,7 +202,7 @@ fn emergency_withdraw_fails_before_delay_in_finalized_state() {
     client.finalize_raffle();
 
     let result = client.try_emergency_withdraw(&creator);
-    assert_eq!(env.events().all().len(), 0);
+    assert_eq!(env.events().all().events().len(), 0);
     assert_eq!(result.err(), Some(Ok(Error::InvalidStatus)));
 }
 
@@ -281,7 +281,7 @@ fn emergency_withdraw_fails_for_no_deadline_raffle_before_timeout() {
     client.buy_tickets(&creator, &1);
 
     let result = client.try_emergency_withdraw(&creator);
-    assert_eq!(env.events().all().len(), 0);
+    assert_eq!(env.events().all().events().len(), 0);
     assert_eq!(result.err(), Some(Ok(Error::EmergencyTooEarly)));
 }
 
@@ -360,7 +360,7 @@ fn emergency_withdraw_fails_in_active_state() {
     client.deposit_prize();
 
     let result = client.try_emergency_withdraw(&creator);
-    assert_eq!(env.events().all().len(), 0);
+    assert_eq!(env.events().all().events().len(), 0);
     assert_eq!(result.err(), Some(Ok(Error::InvalidStatus)));
 }
 

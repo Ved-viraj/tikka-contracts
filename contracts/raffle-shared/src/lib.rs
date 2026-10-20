@@ -1,13 +1,13 @@
 #![no_std]
 #![cfg_attr(not(test), deny(clippy::unwrap_used))]
 
-pub mod constants;
 pub mod config_builder;
+pub mod constants;
 pub mod errors;
 pub mod events;
 pub mod math;
 
-pub use math::{apply_bp, split_bp, BP_DENOMINATOR};
+pub use math::{split_bp, BP_DENOMINATOR};
 
 pub use config_builder::{ConfigValidationError, RaffleConfigBuilder};
 
@@ -603,7 +603,7 @@ macro_rules! impl_require_not_paused {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::{Env, String, Address, BytesN, Vec};
+    use soroban_sdk::{Address, BytesN, Env, String, Vec};
     /// Helper to construct a canonical test configuration with explicit documented defaults.
     fn default_config(env: &Env) -> RaffleConfig {
         let payment_token = Address::from_string(&String::from_str(
@@ -626,6 +626,7 @@ mod test {
             prizes: Vec::new(env),
             randomness_source: RandomnessSource::Internal,
             oracle_address: None,
+            oracle_public_key: None,
             protocol_fee_bp: 0,
             treasury_address: None,
             swap_router: None,
@@ -668,8 +669,14 @@ mod test {
         config.swap_deadline_seconds = None;
 
         let resolved = config.resolve_defaults();
-        assert_eq!(resolved.claim_lockup_seconds, Some(DEFAULT_CLAIM_LOCKUP_SECONDS));
-        assert_eq!(resolved.swap_deadline_seconds, Some(DEFAULT_SWAP_DEADLINE_SECONDS));
+        assert_eq!(
+            resolved.claim_lockup_seconds,
+            Some(DEFAULT_CLAIM_LOCKUP_SECONDS)
+        );
+        assert_eq!(
+            resolved.swap_deadline_seconds,
+            Some(DEFAULT_SWAP_DEADLINE_SECONDS)
+        );
     }
 
     #[test]
@@ -706,14 +713,20 @@ mod test {
         config1.swap_deadline_seconds = None;
         let resolved1 = config1.resolve_defaults();
         assert_eq!(resolved1.claim_lockup_seconds, Some(0));
-        assert_eq!(resolved1.swap_deadline_seconds, Some(DEFAULT_SWAP_DEADLINE_SECONDS));
+        assert_eq!(
+            resolved1.swap_deadline_seconds,
+            Some(DEFAULT_SWAP_DEADLINE_SECONDS)
+        );
 
         // Lockup is None, swap is Some(0)
         let mut config2 = default_config(&env);
         config2.claim_lockup_seconds = None;
         config2.swap_deadline_seconds = Some(0);
         let resolved2 = config2.resolve_defaults();
-        assert_eq!(resolved2.claim_lockup_seconds, Some(DEFAULT_CLAIM_LOCKUP_SECONDS));
+        assert_eq!(
+            resolved2.claim_lockup_seconds,
+            Some(DEFAULT_CLAIM_LOCKUP_SECONDS)
+        );
         assert_eq!(resolved2.swap_deadline_seconds, Some(0));
     }
 }
@@ -818,7 +831,11 @@ mod raffle_status_tests {
     /// Writing this matrix by hand states the legal transition graph once for review.
     const EXPECTED_TRANSITIONS: [(RaffleStatus, RaffleStatus, bool); 49] = [
         // From PendingPrize
-        (RaffleStatus::PendingPrize, RaffleStatus::PendingPrize, false),
+        (
+            RaffleStatus::PendingPrize,
+            RaffleStatus::PendingPrize,
+            false,
+        ),
         (RaffleStatus::PendingPrize, RaffleStatus::Active, true),
         (RaffleStatus::PendingPrize, RaffleStatus::Drawing, false),
         (RaffleStatus::PendingPrize, RaffleStatus::Finalized, false),
@@ -879,7 +896,11 @@ mod raffle_status_tests {
     /// Internal rollback is only legal from Drawing to Active.
     const EXPECTED_INTERNAL_REVERTS: [(RaffleStatus, RaffleStatus, bool); 49] = [
         // From PendingPrize
-        (RaffleStatus::PendingPrize, RaffleStatus::PendingPrize, false),
+        (
+            RaffleStatus::PendingPrize,
+            RaffleStatus::PendingPrize,
+            false,
+        ),
         (RaffleStatus::PendingPrize, RaffleStatus::Active, false),
         (RaffleStatus::PendingPrize, RaffleStatus::Drawing, false),
         (RaffleStatus::PendingPrize, RaffleStatus::Finalized, false),
@@ -938,7 +959,11 @@ mod raffle_status_tests {
 
     #[test]
     fn terminal_states_have_no_outgoing_transitions() {
-        for status in [RaffleStatus::Cancelled, RaffleStatus::Failed, RaffleStatus::Claimed] {
+        for status in [
+            RaffleStatus::Cancelled,
+            RaffleStatus::Failed,
+            RaffleStatus::Claimed,
+        ] {
             assert!(status.is_terminal());
             for target in RaffleStatus::all() {
                 if *target != status {
@@ -992,12 +1017,9 @@ mod raffle_status_tests {
                     .filter(|&&(f, t, _)| f == from && t == to)
                     .count();
                 assert_eq!(
-                    occurrences,
-                    1,
+                    occurrences, 1,
                     "Expected exactly 1 transition entry for pair ({:?}, {:?}), found {}",
-                    from,
-                    to,
-                    occurrences
+                    from, to, occurrences
                 );
             }
         }
@@ -1037,12 +1059,9 @@ mod raffle_status_tests {
                     .filter(|&&(f, t, _)| f == from && t == to)
                     .count();
                 assert_eq!(
-                    occurrences,
-                    1,
+                    occurrences, 1,
                     "Expected exactly 1 internal revert entry for pair ({:?}, {:?}), found {}",
-                    from,
-                    to,
-                    occurrences
+                    from, to, occurrences
                 );
             }
         }

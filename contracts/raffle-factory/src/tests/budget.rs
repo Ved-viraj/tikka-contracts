@@ -42,17 +42,24 @@ fn measure<F: FnOnce()>(env: &Env, f: F) -> Snapshot {
 }
 
 fn assert_within_tolerance(label: &str, actual: Snapshot, baseline: Baseline) {
-    let cpu_limit =
-        ((baseline.cpu_instructions as f64) * (1.0 + TOLERANCE_FRACTION)).ceil() as u64;
+    let cpu_limit = ((baseline.cpu_instructions as f64) * (1.0 + TOLERANCE_FRACTION)).ceil() as u64;
     let mem_limit = ((baseline.memory_bytes as f64) * (1.0 + TOLERANCE_FRACTION)).ceil() as u64;
-    assert!(actual.cpu <= cpu_limit, "{label}: cpu {} > {cpu_limit}", actual.cpu);
-    assert!(actual.mem <= mem_limit, "{label}: memory {} > {mem_limit}", actual.mem);
+    assert!(
+        actual.cpu <= cpu_limit,
+        "{label}: cpu {} > {cpu_limit}",
+        actual.cpu
+    );
+    assert!(
+        actual.mem <= mem_limit,
+        "{label}: memory {} > {mem_limit}",
+        actual.mem
+    );
 }
 
 fn setup_factory(env: &Env) -> (RaffleFactoryClient<'_>, Address, Address) {
-    let admin = Address::generate(env);
-    let treasury = Address::generate(env);
-    let wasm_hash = BytesN::from_array(env, &[0u8; 32]);
+    let admin = existing_address(env);
+    let treasury = existing_address(env);
+    let wasm_hash = upload_instance_wasm(env);
     let contract_id = env.register(RaffleFactory, ());
     let client = RaffleFactoryClient::new(env, &contract_id);
     env.mock_all_auths();

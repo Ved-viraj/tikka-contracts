@@ -216,8 +216,6 @@ pub struct OracleSeedDelivered {
     pub timestamp: u64,
 }
 
-
-
 /// Emitted when the raffle is finalized with all winners selected.
 ///
 /// ## Ticket-ID convention
@@ -584,25 +582,4 @@ pub struct PrizeSwept {
     pub amount: i128,
     /// Ledger timestamp of the sweep.
     pub swept_at: u64,
-}
-
-/// Emitted each time a registered oracle successfully submits a seed in a
-/// quorum randomness round.  Listeners can track submission progress without
-/// polling contract storage.
-#[derive(Clone)]
-#[contractevent]
-#[soroban_sdk::contracttype]
-pub struct OracleSeedDelivered {
-    /// Address of the oracle that delivered the seed.
-    pub oracle: Address,
-    /// The random seed value delivered by this oracle.
-    pub seed: u64,
-    /// The randomness request identifier this seed responds to.
-    pub request_id: u64,
-    /// Running count of valid oracle submissions so far in this round.
-    pub current_count: u32,
-    /// Quorum threshold (k) required to finalize.
-    pub threshold: u32,
-    /// Ledger timestamp of the delivery.
-    pub timestamp: u64,
 }
